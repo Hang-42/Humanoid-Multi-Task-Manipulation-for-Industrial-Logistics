@@ -1,0 +1,55 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# ROS / catkin build products
+build/
+devel/
+install/
+log/
+logs/
+.catkin_tools/
+.ros/
+
+# Runtime output and temporary files
+*.log
+*.pid
+tmp/
+temp/
+.cache/
+
+# Robot data, recordings, and model artifacts
+data/
+camera_frames/
+videos/
+*.bag
+*.bag.active
+*.mp4
+*.avi
+*.mkv
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+
+# Credentials and local configuration
+.env
+.env.*
+*.pem
+*.key
+*.secret
+
+# Editor and operating-system files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

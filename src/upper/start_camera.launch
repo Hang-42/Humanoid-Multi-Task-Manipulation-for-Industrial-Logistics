@@ -1,0 +1,39 @@
+<launch>
+  <!-- Physical wrist assignment confirmed on 2026-10-05. -->
+  <arg name="left_serial" default="412622270772"/>
+  <arg name="right_serial" default="412622271095"/>
+  <arg name="head_serial" default="CP2H163000H0"/>
+
+  <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+    <arg name="camera" value="left_wrist_camera"/>
+    <arg name="serial_no" value="$(arg left_serial)"/>
+    <arg name="enable_depth" value="false"/>
+    <arg name="color_width" value="848"/>
+    <arg name="color_height" value="480"/>
+    <arg name="color_fps" value="30"/>
+  </include>
+  <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+    <arg name="camera" value="right_wrist_camera"/>
+    <arg name="serial_no" value="$(arg right_serial)"/>
+    <arg name="enable_depth" value="false"/>
+    <arg name="color_width" value="848"/>
+    <arg name="color_height" value="480"/>
+    <arg name="color_fps" value="30"/>
+  </include>
+  <include file="$(find orbbec_camera)/launch/gemini_330_series.launch">
+    <arg name="camera_name" value="head_camera"/>
+    <arg name="serial_number" value="$(arg head_serial)"/>
+    <arg name="enable_depth" value="false"/>
+    <arg name="color_format" value="YUYV"/>
+    <arg name="color_rotation" value="180"/>
+    <arg name="color_width" value="848"/>
+    <arg name="color_height" value="480"/>
+    <arg name="color_fps" value="30"/>
+  </include>
+
+  <node pkg="upper" type="camera_relay.py" name="pi05_camera_relay" output="screen" required="true">
+    <param name="jpeg_quality" value="90"/>
+    <param name="publish_hz" value="10"/>
+    <param name="max_frame_age_s" value="0.3"/>
+  </node>
+</launch>

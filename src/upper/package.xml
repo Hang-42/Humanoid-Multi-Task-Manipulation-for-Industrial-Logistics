@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>upper</name>
+  <version>0.1.0</version>
+  <description>PI05 upper-computer camera driver launch and JPEG relay.</description>
+  <maintainer email="team@example.invalid">ChallengeCup team</maintainer>
+  <license>Proprietary</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>realsense2_camera</exec_depend>
+  <exec_depend>orbbec_camera</exec_depend>
+</package>
