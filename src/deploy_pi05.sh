@@ -1,11 +1,27 @@
 #!/usr/bin/env bash
-# Qi entry: install and start only the upper-computer camera stack.
+# Qi entry for the upper camera stack and the local OpenPI inference service.
 set -Eeuo pipefail
 
 task_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 task_upper="$task_dir/upper"
 task_host=${PI05_UPPER_HOST:-leju_kuavo@192.168.26.12}
 task_session=pi05-upper-camera
+task_inference="$task_dir/../pi05/tools/start_inference.sh"
+
+# Inference is explicit: it runs in the foreground and never publishes robot actions.
+case "${1:-}" in
+  --pi05-check|--pi05-start|--pi05-status)
+    test "$#" -ge 3 || {
+      echo 'Usage: ./deploy_pi05.sh --pi05-{check|start|status} --model {cz|kd12|lj|lp} [--port N] [--gpu N] [--host IP]' >&2
+      exit 2
+    }
+    task_mode=${1#--pi05-}
+    shift
+    exec bash "$task_inference" "--$task_mode" "$@" ;;
+  --pi05-install)
+    test "$#" -eq 1 || { echo 'Usage: ./deploy_pi05.sh --pi05-install' >&2; exit 2; }
+    exec bash "$task_dir/../pi05/tools/install_env.sh" --install ;;
+esac
 
 case "${1:-}" in
   ''|--start) task_start=true ;;
@@ -21,7 +37,7 @@ print('PI05_UPPER_SOURCE_OK')
 PY
     python3 -m py_compile "$task_upper/camera_codec.py" "$task_upper/camera_relay.py"
     exit 0 ;;
-  *) echo 'Usage: ./deploy_pi05.sh [--check|--install|--start]' >&2; exit 2 ;;
+  *) echo 'Usage: ./deploy_pi05.sh [--check|--install|--start|--pi05-check|--pi05-install|--pi05-start|--pi05-status]' >&2; exit 2 ;;
 esac
 
 for task_file in upper_start.sh start_camera.launch camera_relay.py camera_codec.py package.xml CMakeLists.txt; do

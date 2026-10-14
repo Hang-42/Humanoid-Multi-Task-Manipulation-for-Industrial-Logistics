@@ -26,6 +26,9 @@ temp/
 
 # Robot data, recordings, and model artifacts
 data/
+/pi05/models/
+/pi05/envs/
+/pi05/openpi/
 camera_frames/
 videos/
 *.bag
