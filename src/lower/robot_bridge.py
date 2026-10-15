@@ -4,6 +4,7 @@ import argparse
 import fcntl
 import json
 import io
+import os
 from pathlib import Path
 import signal
 import select
@@ -22,10 +23,12 @@ from kuavo_msgs.srv import changeArmCtrlMode, handForceLevel, handForceLevelRequ
 from ocs2_msgs.msg import mpc_target_trajectories
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-LOWER_RUNTIME_DIR = PACKAGE_DIR / 'initialize'
+LOWER_RUNTIME_DIR = Path(os.environ.get('PI05_LOWER_INITIALIZE_DIR',
+                                         str(PACKAGE_DIR / 'initialize'))).resolve()
 sys.path.insert(0, str(LOWER_RUNTIME_DIR))
-from robot_runtime import RobotAdapter, filesystem_check, emit, require, write_json
+from robot_runtime import RobotAdapter, controller_instance, filesystem_check, emit, require, write_json
 from hand_pose import HAND_NAMES, ordered_hand_feedback, INITIAL_THUMB, INITIAL_THUMB_AUX, INITIAL_HAND_POSITION
+from pose_math import classify_pose
 from camera_observations import Latest
 from action_safety import (CONTROLLED_HAND_INDICES, HELD_HAND_INDICES,
                            MAX_EXECUTION_STEPS, bounded_plan, retimed_plan, grasp_window,
@@ -115,6 +118,7 @@ class LiveRobot:
         self.initial_hands = None
         self.last_hand_command = None
         self.last_arm_target = None
+        self.completed = False
         self.expected = None
         self.bad_since = None
         self.hand_bad_since = None
@@ -123,6 +127,8 @@ class LiveRobot:
         self.ack_observed = []
         boot = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
         directory = LOWER_RUNTIME_DIR/'logs'/boot
+        self.session_path = directory/'pi05_last_hold.json'
+        self.boot = boot
         check_initialization(json.loads((directory/'result.json').read_text()),boot,
                              INITIAL_THUMB,INITIAL_THUMB_AUX,INITIAL_HAND_POSITION)
         filesystem_check()
@@ -131,7 +137,6 @@ class LiveRobot:
         self.subs.append(rospy.Subscriber('/humanoid_mpc_target_arm',mpc_target_trajectories,
                                           self.observe_ack,queue_size=20))
         self.robot.check_standing()
-        require(self.robot.pose()=='chest_high','Robot has left the initialized VLA arm pose')
         self.latest = Latest()
         for key in ('head_cam_h','wrist_cam_l','wrist_cam_r'):
             topic='/pi05_camera/'+key+'/compressed'
@@ -146,15 +151,100 @@ class LiveRobot:
             require(time.monotonic()<deadline,'Missing fresh head/wrist images or joint/hand state')
             time.sleep(.05)
         self.initial_hands = self.hands()
-        require(max(abs(q-t) for q,t in zip(self.initial_hands,INITIAL_HAND_POSITION))<=3,
-                'Current hands differ from the saved initialization profile')
         self.check_publishers()
         self.robot.check_standing()
+        _,_,arm_deg=self.robot.stable_arm_feedback()
+        self.robot.fk.check_limits(arm_deg)
+        self.controller_identity=controller_instance()
+        self.check_start_pose(arm_deg)
+        self.prepare_arm_mode_handoff(arm_deg)
         emit('LIVE_PREFLIGHT_OK',thumbs=[self.initial_hands[i] for i in (0,6)],
              hand_channel_names=list(HAND_NAMES),hand_feedback=list(self.initial_hands),
              duration_seconds=args.duration,execution_steps_per_inference=args.steps,
              retime=args.retime, confirm_grasp=args.confirm_grasp,
              delay_close_steps=args.delay_close_steps,approach_only=args.approach_only)
+
+    def prepare_arm_mode_handoff(self, arm_deg):
+        mode = rospy.ServiceProxy('/humanoid_get_arm_ctrl_mode',changeArmCtrlMode)(0).mode
+        if mode == 0:
+            return
+        require(mode == 2, 'Arm controller must be in keep-pose mode before VLA claims it; got mode '+str(mode))
+        # The initializer used to leave the controller in external mode after
+        # its final trajectory. Only that exact, current-boot case may be
+        # transferred to keep-pose mode; an interrupted VLA run may not.
+        require(not self.session_path.exists(),
+                'External arm mode with a prior VLA session requires onsite diagnosis')
+        checkpoint = json.loads((self.robot.directory/'arm_checkpoint.json').read_text())
+        require(checkpoint.get('boot_id') == self.boot and
+                checkpoint.get('status') == 'completed_holding' and
+                checkpoint.get('plan_file') in ('side_plan.json','high_inward_plan.json',
+                                                'inward_only_plan.json','side_resume_plan.json',
+                                                'high_inward_resume_plan.json','inward_only_resume_plan.json'),
+                'External arm mode has no completed current-boot initialization plan')
+        plan = json.loads((self.robot.directory/checkpoint['plan_file']).read_text())
+        require(plan.get('boot_id') == self.boot and
+                plan.get('controller_instance') == self.controller_identity,
+                'Controller changed since arm initialization')
+        if not self.args.execute:
+            emit('ARM_MODE_HANDOFF_PENDING',current_mode=2,target_mode=0,
+                 instruction='Keep-pose handoff requires the operator-confirmed execute phase')
+            return
+        self.guard()
+        require(self.robot.mode_service(0).result,'Keep-pose mode request was rejected')
+        require(rospy.ServiceProxy('/humanoid_get_arm_ctrl_mode',changeArmCtrlMode)(0).mode == 0,
+                'Arm controller did not enter keep-pose mode')
+        self.robot.check_standing()
+        _,_,held_deg = self.robot.stable_arm_feedback()
+        require(np.max(np.abs(held_deg-arm_deg)) < 2,
+                'Arm pose changed more than 2 degrees during keep-pose handoff')
+        self.robot.fk.check_limits(held_deg)
+        emit('ARM_MODE_HANDOFF_COMPLETE',from_mode=2,to_mode=0,
+             max_arm_change_deg=float(np.max(np.abs(held_deg-arm_deg))))
+
+    def check_start_pose(self, arm_deg):
+        hand_error=max(abs(q-t) for q,t in zip(self.initial_hands,INITIAL_HAND_POSITION))
+        if classify_pose(arm_deg)=='chest_high' and hand_error<=3:
+            emit('VLA_START_POSE_OK',source='initialized_chest_high')
+            return
+        checkpoint=json.loads((self.robot.directory/'arm_checkpoint.json').read_text())
+        plan_file=checkpoint.get('plan_file')
+        require(checkpoint.get('boot_id')==self.boot and
+                checkpoint.get('status')=='completed_holding' and
+                plan_file in ('side_plan.json','high_inward_plan.json','inward_only_plan.json',
+                              'side_resume_plan.json','high_inward_resume_plan.json',
+                              'inward_only_resume_plan.json'),
+                'No completed current-boot initialization arm plan for VLA resumption')
+        plan=json.loads((self.robot.directory/plan_file).read_text())
+        require(plan.get('boot_id')==self.boot and
+                plan.get('controller_instance')==self.controller_identity,
+                'Controller changed since initialization; current VLA pose cannot be adopted')
+        if self.session_path.is_file():
+            record=json.loads(self.session_path.read_text())
+            saved_q=np.asarray(record.get('arm_deg',[]),dtype=float)
+            saved_h=np.asarray(record.get('hand_feedback',[]),dtype=float)
+            age=time.time()-record.get('saved_unix',0)
+            if (record.get('status')=='HOLD_CONFIRMED' and
+                record.get('boot_id')==self.boot and
+                record.get('controller_instance')==self.controller_identity and
+                saved_q.shape==(14,) and saved_h.shape==(12,) and
+                np.isfinite(saved_q).all() and np.isfinite(saved_h).all() and
+                0<=age<=3600 and
+                np.max(np.abs(arm_deg-saved_q))<=5 and
+                np.max(np.abs(np.asarray(self.initial_hands)-saved_h))<=5):
+                emit('VLA_START_POSE_OK',source='last_confirmed_hold',
+                     marker_age_seconds=round(age,1))
+                return
+        require(self.args.resume_current,
+                'Robot left the initialized VLA pose; use --resume-current only after onsite inspection')
+        initial=np.asarray(json.loads((self.robot.directory/'result.json').read_text())['final_deg'],dtype=float)
+        require(initial.shape==(14,) and np.isfinite(initial).all(),
+                'Initialization arm reference is invalid')
+        arm_error=float(np.max(np.abs(arm_deg-initial)))
+        require(arm_error<=25 and hand_error<=25,
+                'Current pose is too far from initialization for guarded adoption')
+        emit('VLA_START_POSE_OK',source='onsite_confirmed_current_pose',
+             max_arm_deviation_from_initial_deg=round(arm_error,2),
+             max_hand_deviation_from_initial_units=round(hand_error,2))
 
     def store_hands(self, msg):
         self.hand_feedback = (time.monotonic(),msg)
@@ -263,6 +353,10 @@ class LiveRobot:
             time.sleep(.05)
         emit('ROBOT_COMMAND_CONNECTIONS_READY',arm_controller=TIMED_CONTROLLER,
              hand_controller='/nodelet_manager',ack_publisher_uri=self.timed_controller_uri)
+        # Invalidate any earlier clean-hold marker before taking control. A
+        # crash, lost SSH session, or failed trajectory must not auto-resume.
+        write_json(self.session_path,dict(status='ACTIVE',boot_id=self.boot,
+                   controller_instance=self.controller_identity,started_unix=time.time()))
         self.owned=True
         require(self.robot.mode_service(2).result,'Timed arm control mode rejected')
         # Mode activation can accompany the first target; use the existing
@@ -297,7 +391,7 @@ class LiveRobot:
         planner=retimed_plan if self.args.retime else bounded_plan
         frames,hands=planner(actions,q,h,self.robot.fk,steps,
                              held_hand=self.initial_hands,limit_events=limit_events)
-        if self.args.approach_only:
+        if self.args.approach_only or self.args.single_step:
             # Preserve every arm waypoint and the speed caps. Model hand
             # goals are replaced with the verified startup hand feedback.
             fixed=np.rint(self.initial_hands).astype(int).tolist()
@@ -457,6 +551,21 @@ class LiveRobot:
                 emit('ARM_HOLD_FAILED',error=str(exc))
                 raise
             self.owned=False
+            if self.completed:
+                self.robot.check_standing()
+                _,_,arm_deg=self.robot.stable_arm_feedback()
+                hand_feedback=self.hands()
+                self.robot.fk.check_limits(arm_deg)
+                require(rospy.ServiceProxy('/humanoid_get_arm_ctrl_mode',changeArmCtrlMode)(0).mode==0,
+                        'Arm mode did not return to hold')
+                if self.last_hand_command is not None:
+                    require(max(abs(hand_feedback[i]-self.last_hand_command[i])
+                                for i in CONTROLLED_HAND_INDICES)<=10,
+                            'Hand feedback differs from the last held target')
+                write_json(self.session_path,dict(status='HOLD_CONFIRMED',boot_id=self.boot,
+                           controller_instance=self.controller_identity,saved_unix=time.time(),
+                           arm_deg=arm_deg.tolist(),hand_feedback=list(hand_feedback)))
+                emit('VLA_HOLD_MARKER_SAVED',path=str(self.session_path))
         # Hand controller retains its last target; no reopen/reset command.
 
 
@@ -485,6 +594,10 @@ def send_observation(sock, robot):
 def parse_arguments(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--execute',action='store_true')
+    parser.add_argument('--single-step',action='store_true',
+                        help='With --execute, send only one bounded 0.1s arm target, hold the hands, then request arm hold')
+    parser.add_argument('--resume-current',action='store_true',
+                        help='Explicit onsite-approved adoption of the current stable arm/hand pose on this controller')
     parser.add_argument('--approach-only',action='store_true',
                         help='Stop at the first planned closing pose; hold hands at their initial feedback and request arm hold')
     parser.add_argument('--approach-extra-steps',type=int,default=0,
@@ -525,6 +638,12 @@ def prediction_window_diagnostic(actions, steps):
 
 def main():
     args=parse_arguments()
+    if args.single_step:
+        require(args.execute and not (args.retime or args.approach_only or
+                                     args.confirm_grasp or args.delay_close_steps or
+                                     args.approach_extra_steps),
+                '--single-step requires --execute and cannot combine with other rollout modes')
+        args.steps=1
     require(args.duration is None or 1<=args.duration<=600,
             'Duration must be 1..600 seconds when specified')
     if args.execute and args.confirm_grasp:
@@ -568,7 +687,7 @@ def main():
                 planner=retimed_plan if args.retime else bounded_plan
                 planner(response['actions'],q,h,robot.robot.fk,
                         steps=args.steps,held_hand=robot.initial_hands)
-                if not args.approach_only:
+                if not (args.approach_only or args.single_step):
                     robot.set_hand_force_full()
                 robot.claim()
                 end=None if args.duration is None else time.monotonic()+args.duration
@@ -600,6 +719,10 @@ def main():
                         complete=robot.execute(window_actions,steps,end)
                     else:
                         complete=robot.execute(window_actions,steps)
+                    if args.single_step:
+                        emit('SINGLE_STEP_FINISHED',model_steps=steps,complete=complete,
+                             hands_held_at_initial_feedback=True)
+                        break
                     if args.approach_only:
                         try:
                             save_grasp_evidence(robot.latest,robot.robot.directory,[],
@@ -623,6 +746,7 @@ def main():
                          model_record_path=response.get('record_path'),
                          **action_profile(response['actions']))
                     emit('LIVE_INFERENCE_RECEIVED',latency_ms=response.get('latency_ms'),roundtrip_seconds=time.monotonic()-started)
+                robot.completed=True
                 emit('LIVE_RUN_COMPLETED')
         except KeyboardInterrupt as exc:
             emit('LIVE_RUN_STOPPED',reason=str(exc))

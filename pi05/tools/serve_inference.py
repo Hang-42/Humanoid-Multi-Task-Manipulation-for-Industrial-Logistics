@@ -30,7 +30,9 @@ def main() -> None:
         policy=policy,
         host=args.host,
         port=args.port,
-        metadata=policy.metadata,
+        metadata={**policy.metadata,
+                  'pi05_config': args.config,
+                  'pi05_checkpoint': str(args.checkpoint.resolve())},
     ).serve_forever()
 
 

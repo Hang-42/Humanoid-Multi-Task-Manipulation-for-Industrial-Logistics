@@ -25,6 +25,7 @@ export ROS_IP="${LOWER_ROS_IP:-192.168.26.1}"
 export ROS_PACKAGE_PATH="$task_dir${ROS_PACKAGE_PATH:+:$ROS_PACKAGE_PATH}"
 export LD_LIBRARY_PATH="/opt/drake/lib:${LD_LIBRARY_PATH:-}"
 export PYTHONDONTWRITEBYTECODE=1
+export PI05_LOWER_INITIALIZE_DIR="${PI05_LOWER_INITIALIZE_DIR:-/home/lab/kuavo_pi05_lower/initialize}"
 unset ROS_HOSTNAME
 
 task_host="${PI05_WORKSTATION_HOST:-192.168.26.20}"
@@ -37,8 +38,8 @@ test "$(rospack find lower)" = "$task_dir" || {
     echo 'ROS package lower did not resolve to this directory.' >&2
     exit 2
 }
-test -r "$task_dir/initialize/robot_runtime.py"
-test -r "$task_dir/initialize/hand_pose.py"
+test -r "$PI05_LOWER_INITIALIZE_DIR/robot_runtime.py"
+test -r "$PI05_LOWER_INITIALIZE_DIR/hand_pose.py"
 python3 -c 'import rospy, rosgraph, numpy, PIL, sensor_msgs.msg, kuavo_msgs.msg, kuavo_msgs.srv, ocs2_msgs.msg'
 
 if test "${1:-}" = --check; then
