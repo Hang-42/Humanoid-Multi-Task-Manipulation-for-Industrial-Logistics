@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Return S53 arms to the recorded PI05 initialization pose, without moving hands.
+"""Return configured Kuavo arms to the recorded PI05 initialization pose, without moving hands.
 
 Default is a read-only preview.  Executing requires a terminal confirmation on
 the lower computer and a current-boot, same-controller initialization record.
@@ -31,11 +31,14 @@ from pose_math import CHEST_HIGH, POSE_TOLERANCE
 from robot_runtime import (RobotAdapter, controller_instance, emit, filesystem_check,
                            require, write_json)
 from recover_plan import plan_recovery
+from robot_profile import active_profile
+from end_effector import EndEffector
+ROBOT_PROFILE = active_profile()
 
 
 CONTROL_TOPICS = frozenset(('/kuavo_arm_target_poses', '/kuavo_arm_traj',
                             '/kuavo_hand_pose', '/control_robot_hand_position',
-                            '/dexhand/command', '/joy', '/quest_joystick_data'))
+                            '/dexhand/command', '/leju_claw_command', '/joy', '/quest_joystick_data'))
 TIMED_CONTROLLER = '/humanoid_Arm_time_target_control'
 
 
@@ -55,11 +58,13 @@ class Recover:
         self.marker_path = self.directory/'pi05_last_hold.json'
         filesystem_check()
         result = json.loads((self.directory/'result.json').read_text())
+        ROBOT_PROFILE.require_record(result)
         require(result.get('boot_id') == self.boot and result.get('status') == 'POSE_RESTORED',
                 'Robot initialization has not completed on this boot')
         self.robot = RobotAdapter(self.directory, self.boot)
         self.identity = controller_instance()
         checkpoint = json.loads((self.directory/'arm_checkpoint.json').read_text())
+        ROBOT_PROFILE.require_record(checkpoint)
         require(checkpoint.get('boot_id') == self.boot and
                 checkpoint.get('status') == 'completed_holding' and
                 checkpoint.get('plan_file') in ('side_plan.json', 'high_inward_plan.json',
@@ -68,12 +73,14 @@ class Recover:
                                                 'inward_only_resume_plan.json'),
                 'No completed current-boot initialization arm plan')
         saved = json.loads((self.directory/checkpoint['plan_file']).read_text())
+        ROBOT_PROFILE.require_record(saved)
         require(saved.get('boot_id') == self.boot and
                 saved.get('controller_instance') == self.identity,
                 'Arm controller changed since initialization')
         self.previous_session_status = 'none'
         if self.marker_path.exists():
             marker = json.loads(self.marker_path.read_text())
+            ROBOT_PROFILE.require_record(marker)
             require(marker.get('boot_id') == self.boot and
                     marker.get('controller_instance') == self.identity and
                     marker.get('status') in ('HOLD_CONFIRMED', 'ACTIVE'),
@@ -82,9 +89,9 @@ class Recover:
             # block returned the controller to mode 0.  Deliberate recovery
             # can proceed only after the independent checks and onsite gate.
             self.previous_session_status = marker['status']
-        self.hand_sub = rospy.Subscriber('/dexhand/state', JointState, self.store_hands, queue_size=1)
+        self.eef = EndEffector(ROBOT_PROFILE)
         deadline = time.monotonic()+5
-        while self.hand_feedback is None:
+        while not self.eef.available():
             require(time.monotonic() < deadline, 'No dexterous-hand feedback')
             time.sleep(.05)
         self.check()
@@ -93,10 +100,7 @@ class Recover:
         self.hand_feedback = (time.monotonic(), msg)
 
     def hands(self):
-        feedback = self.hand_feedback
-        require(feedback is not None and time.monotonic()-feedback[0] < .5,
-                'Dexterous-hand feedback is stale')
-        return ordered_hand_feedback(feedback[1].name, feedback[1].position)
+        return self.eef.read()
 
     def mode(self):
         response = rospy.ServiceProxy('/humanoid_get_arm_ctrl_mode', changeArmCtrlMode)(0)
@@ -144,7 +148,7 @@ class Recover:
         require(float(np.max(np.abs(current-q))) < 1, 'Arms changed during recovery planning')
         plan = plan_recovery('chest', self.robot.fk, q, CHEST_HIGH,
                              obs.state.value[6:9], obs.state.value[9:12],
-                             raw.joint_data.joint_q[12])
+                             raw.joint_data.joint_q[ROBOT_PROFILE['joints']['waist_index']])
         emit('RECOVER_PREVIEW', start_deg=plan['initial_deg'], target_deg=plan['target_deg'],
              duration_seconds=plan['duration_seconds'],
              peak_speed_deg_s=plan['peak_speed_deg_s'],
@@ -166,13 +170,13 @@ class Recover:
         context = plan['planning_context']
         require(np.max(np.abs(np.asarray(obs.state.value[6:9])-context['base_xyz'])) < .03 and
                 np.max(np.abs(np.asarray(obs.state.value[9:12])-context['base_ypr'])) < .03 and
-                abs(raw.joint_data.joint_q[12]-context['waist_rad']) < .03,
+                abs(raw.joint_data.joint_q[ROBOT_PROFILE['joints']['waist_index']]-context['waist_rad']) < .03,
                 'Base or waist posture changed after trajectory preview')
         # Re-plan using current base and waist feedback; the confirmed path must
         # remain inside the same conservative envelope.
         fresh = plan_recovery('chest', self.robot.fk, q, CHEST_HIGH,
                               obs.state.value[6:9], obs.state.value[9:12],
-                              raw.joint_data.joint_q[12])
+                              raw.joint_data.joint_q[ROBOT_PROFILE['joints']['waist_index']])
         self.check(hands)
         if fresh['already_at_target']:
             self.completed = True
@@ -272,9 +276,11 @@ class Recover:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--robot-profile')
     parser.add_argument('--execute', action='store_true',
                         help='Require onsite terminal confirmation, then return both arms')
     args = parser.parse_args()
+    ROBOT_PROFILE.require_ready()
     if args.execute:
         require(sys.stdin.isatty(), 'Real-robot recovery requires an interactive terminal')
     socket.setdefaulttimeout(5)
@@ -302,7 +308,10 @@ def main():
             raise
         finally:
             if recovery is not None and hands is not None:
-                recovery.hold(hands)
+                try:
+                    recovery.hold(hands)
+                finally:
+                    recovery.eef.close()
 
 
 if __name__ == '__main__':

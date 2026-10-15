@@ -8,14 +8,24 @@ obstacle-aware planner are supplied and tested on the real robot.
 import math
 
 import numpy as np
+import sys
+import os
+from pathlib import Path
+for _parent in Path(__file__).resolve().parents:
+    _common = Path(os.environ.get('PI05_COMMON_DIR', str(_parent / 'common')))
+    if (_common / 'robot_profile.py').is_file():
+        sys.path.insert(0, str(_common))
+        break
+from robot_profile import active_profile
+_safety = active_profile()['safety']
 
 
 RATE_HZ = 10
-MAX_SPEED_DEG_S = 10.0
-MAX_JOINT_DEVIATION_DEG = 70.0
-MAX_POINT_DISPLACEMENT_M = {'elbow': .35, 'wrist': .40, 'modeled_hand_tip': .45}
-MIN_CENTERLINE_CLEARANCE_M = .08
-MAX_BELOW_TARGET_M = .35
+MAX_SPEED_DEG_S = _safety['recovery_speed_deg_s']
+MAX_JOINT_DEVIATION_DEG = _safety['recovery_max_joint_deviation_deg']
+MAX_POINT_DISPLACEMENT_M = _safety['recovery_displacement_m']
+MIN_CENTERLINE_CLEARANCE_M = _safety['recovery_centerline_m']
+MAX_BELOW_TARGET_M = _safety['recovery_max_below_target_m']
 MAX_SAMPLES = 250
 
 

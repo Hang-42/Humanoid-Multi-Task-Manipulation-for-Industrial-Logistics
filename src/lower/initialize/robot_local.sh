@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 # Lower-computer entry. Fresh boots require prepare, manual lowering confirmation, then execute.
 set -eo pipefail
+task_common_candidate="$(dirname -- "${BASH_SOURCE[0]}")/common/profile.sh"
+if ! test -r "$task_common_candidate"; then task_common_candidate="$(dirname -- "${BASH_SOURCE[0]}")/../common/profile.sh"; fi
+if ! test -r "$task_common_candidate"; then task_common_candidate="$(dirname -- "${BASH_SOURCE[0]}")/../../common/profile.sh"; fi
+source "$task_common_candidate"
+profile_args "$@"
+set -- "${PI05_PROFILE_ARGS[@]}"
 task_mode=${1:---check}
 task_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+task_grip_current=${PI05_GRIP_CURRENT_MA:-600}
+case "$task_grip_current" in 500|600) ;; *) echo 'PI05_GRIP_CURRENT_MA must be 500 or 600.' >&2; exit 2 ;; esac
 case "$task_mode" in
   --help|-h)
     printf '%s\n' "Usage: sudo bash $task_dir/robot_local.sh [--check|--check-resume|--resume|--prepare|--confirm-lowered|--execute|--camera-lower|--status]"
@@ -46,9 +54,9 @@ PY
   exit 0
 fi
 source /opt/ros/noetic/setup.bash
-source /home/lab/kuavo-ros-opensource/devel/setup.bash
+source "$PI05_VENDOR_WORKSPACE/devel/setup.bash"
 export LD_LIBRARY_PATH=/opt/drake/lib:${LD_LIBRARY_PATH:-}
-export ROS_MASTER_URI=http://192.168.26.1:11311 ROS_IP=192.168.26.1
+export ROS_MASTER_URI="$LOWER_ROS_MASTER_URI" ROS_IP="$LOWER_ROS_IP"
 export PYTHONDONTWRITEBYTECODE=1
 unset ROS_HOSTNAME
 if test "$task_mode" = --check; then
@@ -91,7 +99,7 @@ ln -sfn "$task_log" "$task_logs/latest.log"
 task_worker_mode=--worker
 if test "$task_mode" = --resume; then task_worker_mode=--resume-worker; fi
 if test "$task_mode" = --camera-lower; then task_worker_mode=--camera-lower-worker; fi
-tmux send-keys -t "$task_pane" -l "bash '$task_dir/robot_local.sh' $task_worker_mode > '$task_log' 2>&1; task_worker_rc=\$?; printf '%s' \"\$task_worker_rc\" > '$task_status'; exit \"\$task_worker_rc\""
+tmux send-keys -t "$task_pane" -l "env PI05_GRIP_CURRENT_MA='$task_grip_current' bash '$task_dir/robot_local.sh' --robot-profile '$PI05_ROBOT_PROFILE' $task_worker_mode > '$task_log' 2>&1; task_worker_rc=\$?; printf '%s' \"\$task_worker_rc\" > '$task_status'; exit \"\$task_worker_rc\""
 tmux send-keys -t "$task_pane" Enter
 printf 'Reset started: tmux=%s log=%s\n' "$task_session" "$task_log"
 # A tmux pane kept by remain-on-exit can leave its child as a zombie. tail

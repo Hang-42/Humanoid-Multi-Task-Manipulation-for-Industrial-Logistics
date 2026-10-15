@@ -18,7 +18,7 @@ import rospy
 import rosgraph
 from sensor_msgs.msg import CompressedImage, JointState
 from kuavo_msgs.msg import sensorsData, armTargetPoses, robotHandPosition
-from kuavo_msgs.srv import changeArmCtrlMode, handForceLevel, handForceLevelRequest
+from kuavo_msgs.srv import changeArmCtrlMode
 from ocs2_msgs.msg import mpc_target_trajectories
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -27,13 +27,17 @@ LOWER_RUNTIME_DIR = Path(os.environ.get('PI05_LOWER_INITIALIZE_DIR',
 sys.path.insert(0, str(LOWER_RUNTIME_DIR))
 from robot_runtime import RobotAdapter, controller_instance, filesystem_check, emit, require, write_json
 from hand_pose import HAND_NAMES, ordered_hand_feedback, INITIAL_THUMB, INITIAL_THUMB_AUX, INITIAL_HAND_POSITION
+from hand_force_setup import validate_receipt
 from pose_math import classify_pose
 from camera_observations import Latest
 from action_safety import (CONTROLLED_HAND_INDICES, HELD_HAND_INDICES,
-                           MAX_EXECUTION_STEPS, bounded_plan, retimed_plan,
-                           approach_window, check_initialization)
+                           ARM_JOINT_NAMES, MAX_EXECUTION_STEPS, bounded_plan, retimed_plan,
+                           approach_window, check_initialization, arm_speed_limit_deg_s)
 from protocol import read_response, send_exact, read_observation
-from arm_ack import TIMED_CONTROLLER, require_timed_controller, command_connections_ready, ack_summary
+from arm_ack import (TIMED_CONTROLLER, require_timed_controller, command_connections_ready,
+                     ack_summary, initial_arm_reference, validate_arm_trajectory_ack)
+from grasp_sync import (synchronized_plan, grasp_execution_window, ArmSettlingGate,
+                        ClosureFeedbackGate, GRASP_TIMEOUT_SECONDS)
 
 
 DEFAULT_EXECUTION_STEPS = 5  # 0.5 seconds at 10 Hz.
@@ -73,6 +77,16 @@ def action_profile(actions):
     }
 
 
+def hand_position_command(values):
+    """Validate then quantize native Revo1 goals for the uint8 ROS message."""
+    target = np.asarray(values, dtype=float)
+    require(target.shape == (12,) and np.isfinite(target).all() and
+            np.all((target >= 0) & (target <= 100)),
+            'Expected 12 finite hand targets in 0..100 before arm execution')
+    # Do not clip invalid goals or change the existing finger/AUX limits.
+    return np.rint(target).astype(int).tolist()
+
+
 class LiveRobot:
     def __init__(self, args):
         self.args = args
@@ -84,6 +98,12 @@ class LiveRobot:
         self.last_arm_target = None
         self.completed = False
         self.expected = None
+        self.arm_reference = None
+        self.grasp_right_armed = True
+        self.grasp_left_armed = True
+        self.grasp_episode_start = None
+        self.grasp_left_episode_start = None
+        self.observation_after = None
         self.bad_since = None
         self.hand_bad_since = None
         self.subs = []
@@ -125,7 +145,10 @@ class LiveRobot:
         emit('LIVE_PREFLIGHT_OK',thumbs=[self.initial_hands[i] for i in (0,6)],
              hand_channel_names=list(HAND_NAMES),hand_feedback=list(self.initial_hands),
              duration_seconds=args.duration,execution_steps_per_inference=args.steps,
-             retime=args.retime,approach_only=args.approach_only)
+             retime=args.retime,approach_only=args.approach_only,
+             sync_grasp=args.sync_grasp,
+             grasp_lookahead=args.grasp_lookahead,
+             arm_speed_limit_deg_s=arm_speed_limit_deg_s())
 
     def prepare_arm_mode_handoff(self, arm_deg):
         mode = rospy.ServiceProxy('/humanoid_get_arm_ctrl_mode',changeArmCtrlMode)(0).mode
@@ -294,6 +317,25 @@ class LiveRobot:
             wanted = np.array([np.interp(obs.time-start,times,frames[:,i]) for i in range(14)])
             if np.max(np.abs(q-wanted))>10:
                 self.bad_since = self.bad_since or time.monotonic()
+                if time.monotonic()-self.bad_since>=.2:
+                    errors=np.abs(q-wanted)
+                    worst=int(np.argmax(errors))
+                    diagnostic=dict(saved_unix=time.time(),
+                        joint_names=list(ARM_JOINT_NAMES),
+                        arm_feedback_deg=q.tolist(), arm_target_deg=wanted.tolist(),
+                        absolute_error_deg=errors.tolist(), worst_joint=ARM_JOINT_NAMES[worst],
+                        worst_error_deg=float(errors[worst]),
+                        over_limit_seconds=time.monotonic()-self.bad_since,
+                        controller_time=float(obs.time),trajectory_start=float(start),
+                        trajectory_elapsed_seconds=float(obs.time-start),
+                        trajectory_duration_seconds=float(times[-1]),
+                        hand_feedback=list(hands),last_hand_command=self.last_hand_command,
+                        execution_steps_per_inference=self.args.steps)
+                    emit('ARM_TRACKING_LIMIT',**diagnostic)
+                    try:
+                        write_json(self.robot.directory/('live-arm-tracking-'+str(time.time_ns())+'.json'),diagnostic)
+                    except Exception as exc:
+                        emit('ARM_DIAGNOSTIC_SAVE_FAILED',error=str(exc))
                 require(time.monotonic()-self.bad_since<.2,'Arm tracking error exceeds 10 degrees')
             else:
                 self.bad_since=None
@@ -321,10 +363,35 @@ class LiveRobot:
         write_json(self.session_path,dict(status='ACTIVE',boot_id=self.boot,
                    controller_instance=self.controller_identity,started_unix=time.time()))
         self.owned=True
+        mode_started=time.monotonic()
         require(self.robot.mode_service(2).result,'Timed arm control mode rejected')
         # Mode activation can accompany the first target; use the existing
         # transition grace period during the guarded post-service wait too.
         self.last_mode_check=time.monotonic()+3
+        # The timed node publishes its exact initstate as a one-point receipt
+        # during mode switching. Never guess the first command origin from
+        # sensor feedback or an old trajectory endpoint.
+        deadline=time.monotonic()+3
+        initial=None
+        while initial is None:
+            _,obs,measured,_=self.guard()
+            with self.robot.telemetry.lock:
+                candidates=list(self.robot.telemetry.acks)
+            initial=initial_arm_reference(candidates,mode_started)
+            if initial is None:
+                require(time.monotonic()<deadline,
+                        'Missing fresh controller mode-switch reference; no arm trajectory sent')
+                time.sleep(.01)
+        reference_times,reference_frames=initial
+        require(-.1<=obs.time-reference_times[0]<=3,
+                'Mode-switch reference clock is stale or in the future')
+        self.arm_reference=reference_frames[0].copy()
+        self.robot.fk.check_limits(self.arm_reference)
+        require(np.max(np.abs(measured-self.arm_reference))<=10,
+                'Controller initial reference differs from measured arms by more than 10 degrees')
+        self.expected=(reference_times[0],[0.],reference_frames)
+        emit('ARM_REFERENCE_INITIALIZED',reference_deg=self.arm_reference.tolist(),
+             source='fresh_mode_switch_ack',arm_speed_limit_deg_s=arm_speed_limit_deg_s())
         # Use the same post-service settling interval as the verified reset
         # adapter; continue checking telemetry instead of sending immediately.
         deadline=time.monotonic()+.2
@@ -335,30 +402,59 @@ class LiveRobot:
         # The controller activates mode 2 when the first timed target arrives.
         self.last_mode_check=time.monotonic()+3
 
-    def set_hand_force_full(self):
-        """Set both dexterous hands to their supported FULL grip-force level."""
-        name = '/dexhand/change_force_level'
-        rospy.wait_for_service(name, timeout=3)
-        request = handForceLevelRequest()
-        request.hand_side = handForceLevelRequest.BOTH_HANDS
-        request.force_level = handForceLevelRequest.FULL
-        result = rospy.ServiceProxy(name, handForceLevel)(request)
-        require(result.success, 'Dexhand FULL force request failed: '+result.message)
-        emit('DEXHAND_FORCE_FULL',hand_side='both',requested_level=int(request.force_level),
-             reported_levels=list(result.force_level),message=result.message)
+    def check_hand_force_setup(self):
+        """Validate pre-controller CAN readback; the legacy FULL service is a no-op."""
+        path = LOWER_RUNTIME_DIR/'hand_force.json'
+        require(path.is_file(), 'Missing current-boot hand-current setup; rerun robot initialization while supported')
+        report = validate_receipt(json.loads(path.read_text()), self.boot)
+        emit('DEXHAND_GRIP_CURRENT_CONFIGURED', hand_side='both',
+             grip_current_ma=report['grip_current_ma'], source='verified_boot_setup',
+             receipt=str(path))
 
     def execute(self, actions, steps, execution_deadline=None):
         _,obs,q,h = self.guard()
+        require(self.arm_reference is not None,'Missing acknowledged arm reference')
+        reference=np.asarray(self.arm_reference,dtype=float).copy()
+        require(reference.shape==(14,) and np.isfinite(reference).all(),
+                'Invalid acknowledged arm reference')
+        require(np.max(np.abs(q-reference))<=10,
+                'Measured arms differ from acknowledged reference by more than 10 degrees')
         limit_events=[]
         model_steps=steps
         planner=retimed_plan if self.args.retime else bounded_plan
-        frames,hands=planner(actions,q,h,self.robot.fk,steps,
-                             held_hand=self.initial_hands,limit_events=limit_events)
+        sync_plan = None
+        if getattr(self.args,'sync_grasp',False):
+            selected_steps,closing_candidates=grasp_execution_window(
+                actions,steps,getattr(self.args,'grasp_lookahead',0),
+                (getattr(self,'grasp_left_armed',True),self.grasp_right_armed))
+            if selected_steps>steps:
+                emit('GRASP_WINDOW_EXTENDED',requested_model_steps=steps,
+                     selected_model_steps=selected_steps,closing_sides=closing_candidates,
+                     model_decision=True)
+            sync_plan = synchronized_plan(actions,q,h,self.robot.fk,selected_steps,
+                held_hand=self.initial_hands,reference_deg=reference,
+                last_hand=self.last_hand_command,
+                right_armed=self.grasp_right_armed,limit_events=limit_events,
+                left_armed=getattr(self,'grasp_left_armed',True))
+            frames,hands=sync_plan['frames'],sync_plan['hands']
+            model_steps=sync_plan['model_steps']
+            emit('SYNC_GRASP_WINDOW',requested_model_steps=steps,
+                 selected_model_steps=selected_steps,
+                 executed_model_steps=model_steps,controller_samples=len(frames),
+                 closing_sides=sync_plan['closing_sides'],
+                 split_before_post_close_motion=sync_plan['close_target'] is not None)
+        else:
+            frames,hands=planner(actions,q,h,self.robot.fk,steps,
+                                 held_hand=self.initial_hands,limit_events=limit_events,
+                                 reference_deg=reference)
         if self.args.approach_only or self.args.single_step:
             # Preserve every arm waypoint and the speed caps. Model hand
             # goals are replaced with the verified startup hand feedback.
             fixed=np.rint(self.initial_hands).astype(int).tolist()
             hands=[list(fixed) for _ in frames]
+        # Validate every hand sample before publishing any part of the arm
+        # trajectory. Profile-based planners may return integral-valued floats.
+        hands=[hand_position_command(target) for target in hands]
         complete=True
         if execution_deadline is not None:
             remaining=max(0,int((execution_deadline-time.monotonic())/.1))
@@ -370,10 +466,17 @@ class LiveRobot:
         steps=len(frames)
         emit('EXECUTION_WINDOW_PLANNED', model_steps=model_steps,
              controller_samples=steps, playback_seconds=round(.1*steps,3),
-             retime=self.args.retime, complete=complete)
+             retime=self.args.retime, complete=complete,
+             arm_speed_limit_deg_s=arm_speed_limit_deg_s(),
+             reference_source='acknowledged_controller_endpoint',
+             initial_reference_deg=reference.tolist(),
+             measured_reference_gap_deg=float(np.max(np.abs(q-reference))))
         if limit_events:
             emit('ARM_MODEL_TARGET_LIMITED',adjustments=limit_events)
         times=[.1*(i+1) for i in range(steps)]
+        planned=np.asarray([reference.tolist()]+frames,dtype=float)
+        require(np.max(np.abs(np.diff(planned,axis=0))/.1)<=arm_speed_limit_deg_s()+.001,
+                'Planned arm trajectory exceeds speed limit, including first segment')
         sent=time.monotonic()
         msg=armTargetPoses()
         msg.times,msg.values,msg.frame=times,[v for frame in frames for v in frame],0
@@ -406,7 +509,24 @@ class LiveRobot:
                 raise RuntimeError('No matching arm acknowledgement; trajectory will not be resent')
             time.sleep(.01)
         start=ack.timeTrajectory[0]
-        self.expected=(start,[0]+times,np.array([q.tolist()]+frames))
+        try:
+            acknowledged_times,acknowledged_frames=validate_arm_trajectory_ack(
+                ack,reference,frames,times,arm_speed_limit_deg_s())
+            require(acknowledged_times[0]>=obs.time-.1,'Arm acknowledgement predates this execution window')
+        except Exception as exc:
+            diagnostic=dict(error=str(exc),expected_initial_deg=reference.tolist(),
+                            expected_endpoint_deg=frames[-1],ack=ack_summary(ack,TIMED_CONTROLLER,time.monotonic()),
+                            trajectory_sent_once=True)
+            emit('ARM_ACK_REJECTED',**diagnostic)
+            try:
+                write_json(self.robot.directory/('live-arm-ack-rejected-'+str(time.time_ns())+'.json'),diagnostic)
+            except Exception as save_error:
+                emit('ARM_DIAGNOSTIC_SAVE_FAILED',error=str(save_error))
+            raise
+        # Follow the actual, fully validated controller trajectory, not a
+        # measured-origin reconstruction with a different initial point.
+        self.expected=(acknowledged_times[0],acknowledged_times-acknowledged_times[0],acknowledged_frames)
+        self.arm_reference=acknowledged_frames[-1].copy()
         index=0
         # The timed controller can report its trajectory clock roughly one
         # second behind wall time after a long retimed window. Keep guarding
@@ -426,10 +546,10 @@ class LiveRobot:
             due=min(steps-1,max(0,int(elapsed/.1)-1))
             if elapsed>=times[0] and due>=index:
                 target=hands[due]
-                # Also bound against measured feedback in case the controller lags.
+                # Log hand position gaps without stopping the rollout.
                 hand_errors=[abs(target[i]-actual[i]) for i in CONTROLLED_HAND_INDICES]
                 if max(hand_errors)>10:
-                    emit('HAND_TRACKING_LIMIT',
+                    emit('HAND_TRACKING_WARNING', stop_enabled=False,
                          controller_sample_1based=due+1,
                          controller_samples=steps, model_steps=model_steps,
                          elapsed_controller_seconds=round(elapsed,3),
@@ -443,7 +563,6 @@ class LiveRobot:
                          last_hand_command=self.last_hand_command,
                          arm_target_deg=frames[due],
                          arm_feedback_deg=measured.tolist())
-                    raise RuntimeError('Hand tracking error exceeds 10 units')
                 hand=robotHandPosition()
                 hand.header.stamp=rospy.Time.now()
                 hand.left_hand_position,hand.right_hand_position=target[:6],target[6:]
@@ -468,7 +587,122 @@ class LiveRobot:
              max_arm_endpoint_error_deg=float(np.max(np.abs(measured-frames[-1]))),
              thumb_targets=[hands[-1][i] for i in (0,6)],
              hand_targets=hands[-1],hand_feedback=actual)
+        if sync_plan is not None and complete:
+            self.grasp_right_armed=sync_plan['right_armed']
+            self.grasp_left_armed=sync_plan['left_armed']
+            for side,attribute in (('left','grasp_left_episode_start'),
+                                   ('right','grasp_episode_start')):
+                index=0 if side=='left' else 1
+                if sync_plan[side+'_armed'] or sync_plan['close_new_episodes'][index]:
+                    setattr(self,attribute,None)
+            if sync_plan['close_target'] is not None:
+                self.wait_model_closure(sync_plan['close_target'],execution_deadline,
+                                        sides=sync_plan['closing_sides'])
         return complete
+
+    def grasp_evidence(self, stage, target):
+        try:
+            path=save_grasp_evidence(self.latest,self.robot.directory,
+                                     getattr(self,'active_grasp_sides',['right']),
+                                     self.hands(),self.last_arm_target)
+            emit('SYNC_GRASP_EVIDENCE',stage=stage,directory=path,hand_target=target)
+        except Exception as exc:
+            # Missing evidence must never authorize a subsequent lift.
+            emit('GRASP_EVIDENCE_SAVE_FAILED',stage=stage,error=str(exc))
+            raise
+
+    def wait_model_closure(self, target, execution_deadline=None, sides=('right',)):
+        """No future arm trajectory is sent during this bounded feedback wait."""
+        target=hand_position_command(target)
+        require(bool(sides) and len(set(sides))==len(sides) and
+                all(side in ('left','right') for side in sides),'Invalid model closing sides')
+        self.active_grasp_sides=list(sides)
+        emit('GRASP_ARM_SETTLING',sides=list(sides),timeout_seconds=GRASP_TIMEOUT_SECONDS)
+        deadline=time.monotonic()+GRASP_TIMEOUT_SECONDS
+        arm_gate=ArmSettlingGate(self.arm_reference)
+        last_diagnostic=None
+        while True:
+            raw,obs,q,_=self.guard()
+            now=time.monotonic()
+            require(execution_deadline is None or now<execution_deadline,
+                    'Run duration reached during grasp wait; no post-close motion sent')
+            ready=arm_gate.observe(now,obs.time,q)
+            diagnostic=arm_gate.diagnostic()
+            if last_diagnostic is None or now-last_diagnostic>=.5:
+                emit('GRASP_ARM_SETTLE_PROGRESS',sides=list(sides),**diagnostic)
+                last_diagnostic=now
+            if now>=deadline:
+                # Save the actual closing scene even when no hand command was
+                # sent. Do not silently adopt the measured pose as the target.
+                emit('GRASP_ARM_SETTLE_TIMEOUT',sides=list(sides),
+                     raw_joint_velocity_rad_s=(None if raw is None else
+                                               list(raw.joint_data.joint_v)),
+                     closure_sent=False,post_close_motion_sent=False,**diagnostic)
+                self.grasp_evidence('arm_settle_timeout',target)
+                raise RuntimeError('Arms did not settle at model closing pose; no closure/lift sent')
+            if ready:
+                emit('GRASP_ARM_SETTLED',sides=list(sides),**diagnostic)
+                break
+            time.sleep(.02)
+        self.guard()
+        require(self.command_connections_ready(),'Command connection lost before model closure')
+        self.grasp_evidence('before_closure',target)
+        _,_,_,closure_start=self.guard()
+        origins={}
+        for side in sides:
+            attribute='grasp_episode_start' if side=='right' else 'grasp_left_episode_start'
+            if getattr(self,attribute,None) is None:
+                setattr(self,attribute,list(closure_start))
+            origins[side]=getattr(self,attribute)
+        hand=robotHandPosition()
+        hand.header.stamp=rospy.Time.now()
+        hand.left_hand_position,hand.right_hand_position=target[:6],target[6:]
+        sent=time.monotonic()
+        gates={side:ClosureFeedbackGate(target,sent,closure_start,origins[side],side=side)
+               for side in sides}
+        require(execution_deadline is None or time.monotonic()<execution_deadline,
+                'Run duration reached before hand command; no closure/lift sent')
+        self.hand_pub.publish(hand)
+        self.last_hand_command=list(target)
+        for side in sides:
+            emit('GRASP_CLOSURE_SENT',side=side,hand_target=target,
+                 closure_start_feedback=list(closure_start),
+                 episode_start_feedback=list(origins[side]),
+                 arm_reference_deg=self.arm_reference.tolist(),model_decision=True,
+                 contact_verified=False,grasp_verified=False)
+        while True:
+            _,_,_,actual=self.guard()
+            now=time.monotonic()
+            try:
+                readiness={side:gate.observe(now,self.hand_feedback[0],actual)
+                           for side,gate in gates.items()}
+            except RuntimeError as exc:
+                self.grasp_evidence('closure_feedback_rejected',target)
+                emit('GRASP_FEEDBACK_REJECTED',error=str(exc),sides=list(sides),
+                     hand_target=target,hand_feedback=actual,
+                     post_close_motion_sent=False,grasp_verified=False)
+                raise
+            if (now-sent>=GRASP_TIMEOUT_SECONDS or
+                    (execution_deadline is not None and now>=execution_deadline)):
+                self.grasp_evidence('closure_timeout',target)
+                for side,gate in gates.items():
+                    emit('GRASP_WAIT_TIMEOUT',side=side,hand_target=target,
+                         hand_feedback=actual,wait_seconds=now-sent,
+                         max_finger_error_units=gate.max_error,
+                         post_close_motion_sent=False,contact_verified=False,
+                         grasp_verified=False,**gate.diagnostic())
+                raise RuntimeError('Hand closure had no validated stable completion before timeout; no lift sent')
+            if all(readiness.values()):
+                self.observation_after=now
+                self.grasp_evidence('closure_motion_complete',target)
+                for side,gate in gates.items():
+                    emit('GRASP_CLOSURE_SETTLED',side=side,hand_target=target,
+                         hand_feedback=actual,wait_seconds=now-sent,
+                         max_finger_error_units=gate.max_error,
+                         contact_verified=False,grasp_verified=False,
+                         next_step='fresh_model_observation',**gate.diagnostic())
+                return
+            time.sleep(.02)
 
     def hold(self):
         if self.owned:
@@ -511,11 +745,33 @@ def rollout_steps(deadline, now, steps=DEFAULT_EXECUTION_STEPS):
 
 
 def send_observation(sock, robot):
+    after=getattr(robot,'observation_after',None)
+    if after is not None:
+        deadline=time.monotonic()+1.
+        required=('head_cam_h','wrist_cam_l','wrist_cam_r')
+        while True:
+            robot.guard()
+            with robot.latest.lock:
+                stamps={key:robot.latest.images[key][0]
+                        for key in required if key in robot.latest.images}
+                if robot.latest.joints is not None:
+                    stamps['joints']=robot.latest.joints[0]
+                if robot.latest.hands is not None:
+                    stamps['hands']=robot.latest.hands[0]
+            if len(stamps)==5 and all(value>after for value in stamps.values()):
+                emit('POST_CLOSURE_OBSERVATION_READY',
+                     sample_seconds_after_closure={k:v-after for k,v in stamps.items()})
+                break
+            require(time.monotonic()<deadline,
+                    'Missing post-closure camera/state samples; no new model action sent')
+            time.sleep(.01)
     payload = robot.latest.packet(.5)
     require(payload is not None, 'No fresh observation packet')
     started = time.monotonic()
     send_exact(sock, payload, robot.guard,
                started + OBSERVATION_SEND_TIMEOUT_SECONDS)
+    if after is not None:
+        robot.observation_after=None
     emit('OBSERVATION_SENT', bytes=len(payload),
          elapsed_seconds=round(time.monotonic()-started, 3))
     return started
@@ -523,6 +779,8 @@ def send_observation(sock, robot):
 
 def parse_arguments(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--model', choices=('kd12','cz','lj','lp'), default='kd12',
+                        help='Selected model identity supplied by the deployment entry')
     parser.add_argument('--execute',action='store_true')
     parser.add_argument('--single-step',action='store_true',
                         help='With --execute, send only one bounded 0.1s arm target, hold the hands, then request arm hold')
@@ -535,6 +793,10 @@ def parse_arguments(argv=None):
                         help='With --approach-only, keep hands open and follow up to N model frames beyond the first closing pose')
     parser.add_argument('--retime',action='store_true',
                         help='Preserve model targets by slowing playback within the existing speed caps')
+    parser.add_argument('--sync-grasp',action='store_true',
+                        help='Synchronize poses/hands; split and wait at either closure (not grasp detection)')
+    parser.add_argument('--grasp-lookahead',type=int,default=0,choices=range(0,11),metavar='N',
+                        help='With --sync-grasp only, extend up to N model frames to a nearby new close; default 0')
     parser.add_argument('--steps',type=int,default=DEFAULT_EXECUTION_STEPS,
                         choices=range(1,MAX_EXECUTION_STEPS+1),metavar='N',
                         help='Actions to execute per prediction: 1..50, default 5 (10 Hz)')
@@ -563,6 +825,10 @@ def prediction_window_diagnostic(actions, steps):
 
 def main():
     args=parse_arguments()
+    require(not args.sync_grasp or not (args.retime or args.single_step or args.approach_only),
+            '--sync-grasp cannot combine with retime/single-step/approach-only')
+    require(args.grasp_lookahead==0 or args.sync_grasp,
+            '--grasp-lookahead requires --sync-grasp')
     if args.single_step:
         require(args.execute and not (args.retime or args.approach_only or
                                      args.approach_extra_steps),
@@ -610,7 +876,7 @@ def main():
                 planner(response['actions'],q,h,robot.robot.fk,
                         steps=args.steps,held_hand=robot.initial_hands)
                 if not (args.approach_only or args.single_step):
-                    robot.set_hand_force_full()
+                    robot.check_hand_force_setup()
                 robot.claim()
                 end=None if args.duration is None else time.monotonic()+args.duration
                 while True:
@@ -628,7 +894,7 @@ def main():
                              requested_extra_steps=args.approach_extra_steps,
                              applied_extra_steps=applied_extra_steps,
                              execution_model_steps=steps)
-                    if args.retime:
+                    if args.retime or args.sync_grasp:
                         complete=robot.execute(window_actions,steps,end)
                     else:
                         complete=robot.execute(window_actions,steps)

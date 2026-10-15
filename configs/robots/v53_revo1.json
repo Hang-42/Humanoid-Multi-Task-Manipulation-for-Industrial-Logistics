@@ -1,0 +1,229 @@
+{
+  "schema_version": 1,
+  "robot_id": "v53_qi",
+  "robot_version": 53,
+  "eef_type": "revo1",
+  "validated": true,
+  "legacy_records_allowed": true,
+  "network": {
+    "lower_host": "lab@192.168.26.1",
+    "upper_host": "leju_kuavo@192.168.26.12",
+    "lower_ip": "192.168.26.1",
+    "upper_ip": "192.168.26.12",
+    "workstation_ip": "192.168.26.20",
+    "proxy_port": 19092,
+    "inference_port": 8000
+  },
+  "paths": {
+    "vendor_workspace": "/home/lab/kuavo-ros-opensource",
+    "upper_workspace": "/home/leju_kuavo/kuavo_ros_application",
+    "lower_root": "/home/lab/kuavo_pi05_lower",
+    "upper_root": "/home/leju_kuavo/pi05_upper",
+    "urdf": "/home/lab/kuavo-ros-opensource/src/kuavo_assets/models/biped_s53/urdf/biped_s53.urdf",
+    "urdf_sha256": null,
+    "vendor_config": "/home/lab/kuavo-ros-opensource/src/kuavo_assets/config/kuavo_v53/kuavo.json"
+  },
+  "calibration": {
+    "/home/lab/.config/lejuconfig/offset.csv": "efc49e2e379deb0970ff18ab89cf4e572487c4c313b351faefab2d27045d6dfc",
+    "/home/lab/.config/lejuconfig/arms_zero.yaml": "07edfaee3bceffea58268d455b2cf186d250a5bece072ed899ba64827ce5d169"
+  },
+  "joints": {
+    "sensor_count": 29,
+    "arm_indices": [
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26
+    ],
+    "waist_index": 12
+  },
+  "poses": {
+    "arms_down_bounds_deg": [[-5,20],[-12,12],[-5,5],[-35,1],[-5,5],[-5,5],[-5,5],[-5,20],[-12,12],[-5,5],[-35,1],[-5,5],[-5,5],[-5,5]],
+    "side": [
+      0,
+      90,
+      0,
+      -5,
+      0,
+      0,
+      0,
+      0,
+      -90,
+      0,
+      -5,
+      0,
+      0,
+      0
+    ],
+    "folded": [
+      -90,
+      90,
+      0,
+      -90,
+      0,
+      0,
+      0,
+      -90,
+      -90,
+      0,
+      -90,
+      0,
+      0,
+      0
+    ],
+    "chest_high": [
+      -10.236,
+      8.632,
+      3.001,
+      -94.519,
+      -29.75,
+      -6.363,
+      14.86,
+      -22.051,
+      -6.009,
+      6.231,
+      -80.351,
+      27.464,
+      13.436,
+      8.091
+    ]
+  },
+  "tool": {
+    "end_joint_pattern": "zarm_%s7_end_effector_joint",
+    "left_xyz": [
+      0,
+      0,
+      0
+    ],
+    "left_rpy": [
+      0,
+      0,
+      0
+    ],
+    "right_xyz": [
+      0,
+      0,
+      0
+    ],
+    "right_rpy": [
+      0,
+      0,
+      0
+    ]
+  },
+  "safety": {
+    "pose_tolerance_deg": [8,5,3,4,5,5,5,8,5,3,4,5,5,5],
+    "startup_wrist_drop_limit_m": 0.55,
+    "arm_speed_deg_s": 20,
+    "tracking_error_deg": 10,
+    "tracking_grace_s": 0.2,
+    "recovery_speed_deg_s": 10,
+    "recovery_centerline_m": 0.08,
+    "recovery_max_joint_deviation_deg": 70,
+    "recovery_max_below_target_m": 0.35,
+    "recovery_displacement_m": {
+      "elbow": 0.35,
+      "wrist": 0.4,
+      "modeled_hand_tip": 0.45
+    }
+  },
+  "end_effector": {
+    "driver_type": "qiangnao",
+    "state_topic": "/dexhand/state",
+    "command_topic": "/control_robot_hand_position",
+    "initial": [
+      15,
+      99,
+      0,
+      0,
+      0,
+      0,
+      15,
+      99,
+      0,
+      0,
+      0,
+      0
+    ],
+    "finger_caps": [
+      60,
+      60,
+      75,
+      75,
+      75,
+      100,
+      100,
+      100,
+      100,
+      100
+    ],
+    "current_setup": "revo1_advanced_can",
+    "velocity": 30,
+    "effort_a": 1,
+    "min_command_interval_s": 0.1,
+    "command_timeout_s": 5,
+    "position_deadband": 1,
+    "open_position": [
+      0,
+      0
+    ],
+    "closed_position": [
+      100,
+      100
+    ]
+  },
+  "cameras": {
+    "serials": {
+      "left": "412622270772",
+      "right": "412622271095",
+      "head": "CP2H163000H0"
+    },
+    "rotations": {
+      "head_cam_h": 180,
+      "wrist_cam_l": 0,
+      "wrist_cam_r": 0
+    },
+    "head_driver_rotation": 180,
+    "topics": {
+      "head_cam_h": "/head_camera/color/image_raw",
+      "wrist_cam_l": "/left_wrist_camera/color/image_raw",
+      "wrist_cam_r": "/right_wrist_camera/color/image_raw"
+    }
+  },
+  "models": {
+    "kd12": {
+      "config": "pi05_kuavo_kd_fsdp8",
+      "asset": "kuavo_kd",
+      "checkpoint": "pi05/models/kd12/19999",
+      "validated": true
+    },
+    "cz": {
+      "config": "pi05_kuavo_cz_fsdp8",
+      "asset": "kuavo_cz",
+      "checkpoint": "pi05/models/cz/19999",
+      "validated": true
+    },
+    "lj": {
+      "config": "pi05_kuavo_lj_fsdp8",
+      "asset": "kuavo_lj",
+      "checkpoint": "pi05/models/lj/19999",
+      "validated": true
+    },
+    "lp": {
+      "config": "pi05_kuavo_lp_fsdp8",
+      "asset": "kuavo_lp",
+      "checkpoint": "pi05/models/lp/19999",
+      "validated": true
+    }
+  }
+}

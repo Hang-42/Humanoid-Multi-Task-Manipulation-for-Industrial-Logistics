@@ -10,9 +10,13 @@ import sys
 import time
 import urllib.parse
 import xmlrpc.client
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src/common'))
+from robot_profile import active_profile
+ROBOT_PROFILE = active_profile()
 
 
-MASTER_URI = "http://192.168.26.1:11311"
+MASTER_URI = "http://" + ROBOT_PROFILE['network']['lower_ip'] + ":11311"
 NODE_NAME = "/humanoid_VR_hand_control"
 ARM_TOPIC = "/kuavo_arm_target_poses"
 CALLER_ID = "/pi05_vr_control_guard"
@@ -33,7 +37,7 @@ def node_uri(master):
     if code != 1 or not isinstance(uri, str):
         raise RuntimeError(f"ROS lookupNode failed: {message}")
     parsed = urllib.parse.urlparse(uri)
-    if parsed.scheme != "http" or parsed.hostname != "192.168.26.1" or not parsed.port:
+    if parsed.scheme != "http" or parsed.hostname != ROBOT_PROFILE['network']['lower_ip'] or not parsed.port:
         raise RuntimeError(f"Refusing to shut down a VR node outside the lower computer: {uri}")
     return uri
 
@@ -69,9 +73,14 @@ def disable_once(master, require_empty_arm_topic=True):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--robot-profile')
+    parser.add_argument('--profile-hash')
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--watch", action="store_true")
     args = parser.parse_args()
+    if args.profile_hash and args.profile_hash != ROBOT_PROFILE.digest:
+        parser.error('Profile file changed since launch')
+    ROBOT_PROFILE.require_ready()
     if args.once == args.watch:
         parser.error("choose exactly one of --once or --watch")
     socket.setdefaulttimeout(3.0)

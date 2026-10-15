@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manual-controller bootstrap, one-shot stand, and verified arm reset for v53."""
+"""Manual-controller bootstrap, one-shot stand, and profile-selected verified arm reset."""
 import argparse
 import fcntl
 import hashlib
@@ -12,6 +12,9 @@ import subprocess
 import threading
 import time
 import xmlrpc.client
+import sys
+import os
+import shlex
 from urllib.parse import urlparse
 
 import numpy as np
@@ -22,6 +25,14 @@ from kuavo_msgs.srv import changeArmCtrlMode, getCurrentGaitName
 from ocs2_msgs.msg import mpc_observation, mpc_target_trajectories
 from std_msgs.msg import Float64, Float64MultiArray, Int8
 from std_srvs.srv import Trigger
+for _parent in Path(__file__).resolve().parents:
+    _common = Path(os.environ.get('PI05_COMMON_DIR', str(_parent / 'common')))
+    if (_common / 'robot_profile.py').is_file():
+        sys.path.insert(0, str(_common))
+        break
+from robot_profile import active_profile
+from end_effector import EndEffector
+ROBOT_PROFILE = active_profile()
 from pose_math import ArmFK, classify_pose, make_plan, resume_saved_plan
 from hand_pose import ThumbMover, INITIAL_THUMB, INITIAL_THUMB_AUX, INITIAL_HAND_POSITION
 from pose_flow import (restore_pose, claim_stand_once, require_unclaimed_stand, require_resume_ready,
@@ -29,14 +40,11 @@ from pose_flow import (restore_pose, claim_stand_once, require_unclaimed_stand, 
                        wait_for_leg_settling)
 
 HERE = Path(__file__).resolve().parent
-WORKSPACE = Path('/home/lab/kuavo-ros-opensource')
-URDF = WORKSPACE / 'src/kuavo_assets/models/biped_s53/urdf/biped_s53.urdf'
+WORKSPACE = Path(ROBOT_PROFILE['paths']['vendor_workspace'])
+URDF = Path(ROBOT_PROFILE['paths']['urdf'])
 SERVICE = 'ocs2_h12pro_monitor.service'
-CALIBRATION = {
-    '/home/lab/.config/lejuconfig/offset.csv': 'efc49e2e379deb0970ff18ab89cf4e572487c4c313b351faefab2d27045d6dfc',
-    '/home/lab/.config/lejuconfig/arms_zero.yaml': '07edfaee3bceffea58268d455b2cf186d250a5bece072ed899ba64827ce5d169',
-}
-PROFILE = {'/robot_version':53, '/armRealDof':14, '/mpc/mpcWaistDof':1,
+CALIBRATION = ROBOT_PROFILE['calibration']
+PROFILE = {'/robot_version':ROBOT_PROFILE['robot_version'], '/armRealDof':14, '/mpc/mpcWaistDof':1,
            '/start_way':'manual', '/is_rl_start':False,
            '/stand_up_protect':True, '/joint_protect_enable':True,
            '/cmd_truncation_enable':True, '/leg_disable_mode':True}
@@ -55,6 +63,7 @@ def command(*args, check=True):
 
 
 def write_json(path, value):
+    value = dict(value, robot_identity=ROBOT_PROFILE.identity)
     temporary = path.with_name(path.name+'.tmp-'+str(os.getpid()))
     temporary.write_text(json.dumps(value,indent=2),encoding='utf-8')
     temporary.replace(path)
@@ -71,6 +80,7 @@ def bus_owners():
 
 
 def filesystem_check():
+    ROBOT_PROFILE.require_ready()
     require(os.geteuid()==0,'Run with sudo on the lower computer')
     controller = HERE/'robot_controller.sh'
     require(controller.is_file(),'Controller launch script is missing: '+str(controller))
@@ -78,11 +88,20 @@ def filesystem_check():
     require(Path('/dev/atemsys').is_char_device(),'This is not the expected lower computer')
     for name, expected in CALIBRATION.items():
         require(hashlib.sha256(Path(name).read_bytes()).hexdigest()==expected,
-                'Calibration changed; do not reuse the v53 profile: '+name)
+                'Calibration differs from the selected robot profile: '+name)
+    vendor = json.loads(Path(ROBOT_PROFILE['paths']['vendor_config']).read_text())
+    expected_driver = ROBOT_PROFILE['end_effector']['driver_type']
+    vendor_driver = vendor.get('EndEffectorType')
+    require(vendor_driver == expected_driver or vendor_driver == [expected_driver, expected_driver],
+            'Vendor EndEffectorType does not match this robot profile')
     for library in (WORKSPACE/'installed/lib/libros_hardware_plant_cxx.so',WORKSPACE/'devel/lib/libnodelet_controller.so'):
         result = command('ldd',str(library))
         require('not found' not in result.stdout,'Missing runtime dependency: '+result.stdout)
     require(URDF.is_file(),'Robot URDF is missing')
+    expected_urdf = ROBOT_PROFILE['paths'].get('urdf_sha256')
+    if expected_urdf:
+        require(hashlib.sha256(URDF.read_bytes()).hexdigest() == expected_urdf,
+                'URDF/tool geometry changed since this profile was verified')
 
 
 def matches_manual_profile():
@@ -96,7 +115,7 @@ def matches_manual_profile():
 def controller_instance():
     """Identify the active lower-computer controller without modifying its state."""
     uri=rosgraph.Master(rospy.get_name()).lookupNode('/nodelet_manager')
-    require(urlparse(uri).hostname in ('192.168.26.1','127.0.0.1','localhost'),
+    require(urlparse(uri).hostname in (ROBOT_PROFILE['network']['lower_ip'],'127.0.0.1','localhost'),
             'Controller node is not on the expected lower computer')
     code,message,pid=xmlrpc.client.ServerProxy(uri).getPid(rospy.get_name())
     require(code==1 and isinstance(pid,int) and pid>0,'Cannot identify controller PID: '+str(message))
@@ -108,8 +127,16 @@ def controller_instance():
 
 def bootstrap(execute, directory=None):
     filesystem_check()
+    grip_current = os.environ.get('PI05_GRIP_CURRENT_MA', '600')
+    require(grip_current in ('500', '600'), 'PI05_GRIP_CURRENT_MA must be 500 or 600')
     online = rosgraph.is_master_online()
     if online and matches_manual_profile():
+        if ROBOT_PROFILE['end_effector']['current_setup'] == 'revo1_advanced_can':
+            from hand_force_setup import validate_receipt
+            receipt = HERE/'hand_force.json'
+            require(receipt.is_file(), 'Running controller has no verified hand-current receipt; leave it running and reinitialize only when mechanically supported')
+            record = validate_receipt(json.loads(receipt.read_text()), Path('/proc/sys/kernel/random/boot_id').read_text().strip())
+            require(record['grip_current_ma'] == int(grip_current), 'Running controller uses a different grip current; do not change CAN parameters while standing')
         emit('reuse_manual_controller')
         return True
     require(not bus_owners(),'Existing motor controller does not match the audited manual profile; it was left running')
@@ -137,7 +164,7 @@ def bootstrap(execute, directory=None):
     command('tmux','set-window-option','-t',pane,'remain-on-exit','on')
     launch_log = str(directory/'controller.log')
     # Fixed installation paths contain no whitespace or shell metacharacters.
-    command('tmux','send-keys','-t',pane,'-l','exec bash '+str(HERE/'robot_controller.sh')+' > '+launch_log+' 2>&1')
+    command('tmux','send-keys','-t',pane,'-l','exec env PI05_GRIP_CURRENT_MA='+grip_current+' bash '+shlex.quote(str(HERE/'robot_controller.sh'))+' --robot-profile '+shlex.quote(str(ROBOT_PROFILE.path))+' > '+shlex.quote(launch_log)+' 2>&1')
     command('tmux','send-keys','-t',pane,'Enter')
     emit('controller_initialization_started',log=launch_log)
     deadline = time.monotonic()+120
@@ -176,7 +203,7 @@ class Telemetry:
         self.stand_sub = rospy.Subscriber('/bot_stand_up_complete',Int8,self.stand_complete,queue_size=10)
         self.subs.append(self.stand_sub)
         for topic in ('/kuavo_arm_target_poses','/kuavo_arm_traj','/kuavo_hand_pose','/joy','/quest_joystick_data',
-                      '/control_robot_hand_position','/dexhand/command'):
+                      '/control_robot_hand_position','/dexhand/command','/leju_claw_command'):
             self.subs.append(rospy.Subscriber(topic,rospy.AnyMsg,self.input_message,queue_size=10))
 
     def store(self, key, msg):
@@ -207,9 +234,10 @@ class Telemetry:
         require(all(k in data and time.monotonic()-data[k][0]<1 for k in required),'Telemetry is missing or older than one second')
         raw = data['raw'][1]
         obs = data.get('obs',(0,None))[1]
-        require(len(raw.joint_data.joint_q)==29 and len(raw.joint_data.joint_v)==29,'Expected 29 sensor joints')
+        count = ROBOT_PROFILE['joints']['sensor_count']
+        require(len(raw.joint_data.joint_q)==count and len(raw.joint_data.joint_v)==count,'Unexpected sensor joint count')
         require(np.isfinite(raw.joint_data.joint_q).all() and np.isfinite(raw.joint_data.joint_v).all(),'Nonfinite sensor values')
-        require(len(data['errors'][1].data)==29 and all(x==0 for x in data['errors'][1].data),'Motor error or incomplete motor telemetry')
+        require(len(data['errors'][1].data)==count and all(x==0 for x in data['errors'][1].data),'Motor error or incomplete motor telemetry')
         if self.fall_topic_available:
             require(data['fall'][1].data==0,'Fall-state flag is active')
         require(external==0,'An external arm or teleoperation command source is active')
@@ -217,7 +245,7 @@ class Telemetry:
             require(obs.mode==15 and rospy.get_param('/hardware/is_ready',0)==1,'Standing/support status changed')
             require(len(obs.state.value)>=12 and np.isfinite(obs.state.value[:12]).all(),'Invalid base pose')
             require(max(abs(x) for x in obs.state.value[10:12])<np.deg2rad(5),'Body lean exceeds five degrees')
-        return raw,obs,np.degrees(np.array(raw.joint_data.joint_q[13:27],dtype=float))
+        return raw,obs,np.degrees(np.array(raw.joint_data.joint_q,dtype=float)[ROBOT_PROFILE['joints']['arm_indices']])
 
 
 def wait_for_retracted_legs(telemetry):
@@ -238,6 +266,8 @@ def wait_for_retracted_legs(telemetry):
 class RobotAdapter:
     def __init__(self, directory, boot):
         self.directory,self.boot = directory,boot
+        if (directory/'result.json').is_file():
+            ROBOT_PROFILE.require_record(json.loads((directory/'result.json').read_text()))
         self.fk = ArmFK(URDF)
         self.telemetry = Telemetry()
         self.report = {'boot_id':boot,'status':'checking','stages':[],'lowering_executed':False,'vla_started':False}
@@ -256,15 +286,17 @@ class RobotAdapter:
         path=self.directory/'arm_checkpoint.json'
         require(path.is_file(),'Unknown arm posture and no saved checkpoint; cannot resume automatically')
         checkpoint=json.loads(path.read_text())
+        ROBOT_PROFILE.require_record(checkpoint)
         require(checkpoint.get('boot_id')==self.boot and checkpoint.get('status') in
                 ('claimed_before_send','sent','failed'),'No interrupted arm command checkpoint to resume')
         plan_file=checkpoint.get('plan_file','')
         require(plan_file in tuple(stage+suffix for stage in ('side','high_inward','inward_only')
                                   for suffix in ('_plan.json','_resume_plan.json')),'Invalid checkpoint path')
         saved=json.loads((self.directory/plan_file).read_text())
+        ROBOT_PROFILE.require_record(saved)
         raw,obs,q=self.stable_arm_feedback()
         return resume_saved_plan(saved,self.fk,q,obs.state.value[6:9],obs.state.value[9:12],
-                                 raw.joint_data.joint_q[12],self.boot,controller_instance())
+                                 raw.joint_data.joint_q[ROBOT_PROFILE['joints']['waist_index']],self.boot,controller_instance())
 
     def resume_interrupted_arm_stage(self):
         self.check_standing()
@@ -298,7 +330,7 @@ class RobotAdapter:
         emit('waiting_for_arm_settling',timeout_seconds=5)
         while True:
             raw,obs,q = self.telemetry.read(standing=True)
-            velocity = np.max(np.abs(raw.joint_data.joint_v[13:27]))
+            velocity = np.max(np.abs(np.asarray(raw.joint_data.joint_v)[ROBOT_PROFILE['joints']['arm_indices']]))
             position_delta = np.inf if previous is None else np.max(np.abs(q-previous))
             now = time.monotonic()
             require(now<deadline,'Arms did not settle within 5 s; max speed=%.6f rad/s, '
@@ -353,13 +385,13 @@ class RobotAdapter:
     def move(self, stage, prepared_plan=None):
         self.check_standing()
         raw,obs,q = self.stable_arm_feedback()
-        plan = prepared_plan if prepared_plan is not None else make_plan(stage,self.fk,q,obs.state.value[6:9],obs.state.value[9:12],raw.joint_data.joint_q[12])
+        plan = prepared_plan if prepared_plan is not None else make_plan(stage,self.fk,q,obs.state.value[6:9],obs.state.value[9:12],raw.joint_data.joint_q[ROBOT_PROFILE['joints']['waist_index']])
         if prepared_plan is not None:
             require(np.max(np.abs(q-np.asarray(plan['initial_deg'])))<2,'Arms changed after resume planning')
             require(prepared_plan['controller_instance']==controller_instance(),'Controller changed after resume planning')
         plan=dict(plan,boot_id=self.boot,stage=stage,controller_instance=controller_instance(),
                   planning_context={'base_xyz':list(obs.state.value[6:9]),'base_ypr':list(obs.state.value[9:12]),
-                                    'waist_rad':float(raw.joint_data.joint_q[12])},created_unix=time.time())
+                                    'waist_rad':float(raw.joint_data.joint_q[ROBOT_PROFILE['joints']['waist_index']])},created_unix=time.time())
         plan_file=stage+('_resume_plan.json' if prepared_plan is not None else '_plan.json')
         write_json(self.directory/plan_file,plan)
         checkpoint={'boot_id':self.boot,'stage':stage,'plan_file':plan_file,'status':'prepared'}
@@ -450,18 +482,27 @@ class RobotAdapter:
             self.save()
             raise
 
-    def reset_thumbs(self):
+    def reset_end_effector(self):
         self.check_standing()
         _,_,initial = self.stable_arm_feedback()
-        self.report['thumb_reset'] = {'status':'checking','target':list(INITIAL_HAND_POSITION)}
+        self.report['end_effector_init'] = {'status':'checking','target':list(INITIAL_HAND_POSITION)}
         self.save()
         def check_robot():
             _,_,current = self.telemetry.read(standing=True)
             require(np.max(np.abs(current-initial))<2,'Arms moved during initial thumb reset')
-        result = ThumbMover(check_robot,emit).move(INITIAL_THUMB,INITIAL_THUMB,
-            hand_target=INITIAL_HAND_POSITION)
+        if ROBOT_PROFILE.hand_size == 12:
+            result = ThumbMover(check_robot,emit).move(INITIAL_THUMB,INITIAL_THUMB,
+                hand_target=INITIAL_HAND_POSITION)
+        else:
+            adapter = EndEffector(ROBOT_PROFILE)
+            try:
+                result = adapter.initialize(check_robot)
+            finally:
+                adapter.close()
         self.check_standing()
-        self.report['thumb_reset'] = dict(result,status='completed',command_units='0..100')
+        self.report['end_effector_init'] = dict(result,status='completed',command_units='0..100')
+        if ROBOT_PROFILE.hand_size == 12:
+            self.report['thumb_reset'] = self.report['end_effector_init']
         self.save()
         emit('initial_thumbs_restored',left_target=INITIAL_THUMB,right_target=INITIAL_THUMB,
              hand_target=list(INITIAL_HAND_POSITION),actual=result['actual'])
@@ -493,6 +534,7 @@ def interrupted(signum, frame):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--robot-profile')
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument('--execute',action='store_true')
     actions.add_argument('--resume',action='store_true')
@@ -505,6 +547,11 @@ def main():
     actions.add_argument('--camera-lower-final',action='store_true')
     actions.add_argument('--shoulder-inward-rotate',action='store_true')
     args = parser.parse_args()
+    ROBOT_PROFILE.require_ready()
+    require(ROBOT_PROFILE['robot_version'] == 53 or not (
+        args.camera_lower or args.camera_lower_inward or args.camera_lower_inward_more or
+        args.camera_lower_final or args.shoulder_inward_rotate),
+        'The historical S53 camera trial motions are disabled on V55; set a verified profile startup pose')
     socket.setdefaulttimeout(8)
     signal.signal(signal.SIGINT,interrupted)
     signal.signal(signal.SIGTERM,interrupted)

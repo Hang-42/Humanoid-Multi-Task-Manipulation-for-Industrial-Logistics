@@ -2,6 +2,15 @@
 """Three read-only ROS image subscriptions and compressed PI05 publications."""
 import threading
 import time
+import sys
+import os
+from pathlib import Path
+for _parent in Path(__file__).resolve().parents:
+    _common = Path(os.environ.get('PI05_COMMON_DIR', str(_parent / 'common')))
+    if (_common / 'robot_profile.py').is_file():
+        sys.path.insert(0, str(_common))
+        break
+from robot_profile import active_profile
 
 import rospy
 from sensor_msgs.msg import CompressedImage, Image
@@ -9,11 +18,7 @@ from sensor_msgs.msg import CompressedImage, Image
 from camera_codec import encode_rgb_jpeg, raw_rgb
 
 
-CAMERAS = {
-    "head_cam_h": "/head_camera/color/image_raw",
-    "wrist_cam_l": "/left_wrist_camera/color/image_raw",
-    "wrist_cam_r": "/right_wrist_camera/color/image_raw",
-}
+CAMERAS = active_profile()['cameras']['topics']
 
 
 def main():

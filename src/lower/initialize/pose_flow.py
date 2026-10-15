@@ -4,6 +4,14 @@ import math
 import os
 from pathlib import Path
 import time
+import sys
+import os
+for _parent in Path(__file__).resolve().parents:
+    _common = Path(os.environ.get('PI05_COMMON_DIR', str(_parent / 'common')))
+    if (_common / 'robot_profile.py').is_file():
+        sys.path.insert(0, str(_common))
+        break
+from robot_profile import active_profile
 
 
 def wait_for_leg_settling(read_sample, timeout=30, clock=time.monotonic, sleep=time.sleep):
@@ -46,6 +54,7 @@ def confirm_manual_lowering(directory, boot_id, now=None):
     directory = Path(directory)
     confirmed = time.time() if now is None else float(now)
     record = {
+        'robot_identity': active_profile().identity,
         'boot_id': boot_id,
         'confirmed_unix': confirmed,
         'operator_assertion': 'feet approximately 10 cm above ground',
@@ -65,6 +74,7 @@ def require_manual_lowering(directory, boot_id, max_age=600, now=None):
     if not path.is_file():
         raise RuntimeError('Manual lowering to approximately 10 cm has not been confirmed')
     record = json.loads(path.read_text())
+    active_profile().require_record(record)
     current = time.time() if now is None else float(now)
     if record.get('boot_id') != boot_id:
         raise RuntimeError('Manual lowering confirmation belongs to another boot')
@@ -124,7 +134,7 @@ def restore_pose(adapter, resume_only=False):
         adapter.check_standing()
         pose = adapter.pose()
     if pose == 'chest_high':
-        adapter.reset_thumbs()
+        adapter.reset_end_effector()
         adapter.done(already_at_target=True)
         return
     if pose == 'arms_down':
@@ -142,5 +152,5 @@ def restore_pose(adapter, resume_only=False):
     adapter.check_standing()
     if adapter.pose() != 'chest_high':
         raise RuntimeError('Final recorded VLA pre-pose was not reached')
-    adapter.reset_thumbs()
+    adapter.reset_end_effector()
     adapter.done(already_at_target=False)

@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Start one OpenPI policy server in the foreground. No ROS publisher or robot actuation.
 set -Eeuo pipefail
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../src/common/profile.sh"
+profile_args "$@"
+set -- "${PI05_PROFILE_ARGS[@]}"
 
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 task_mode=--check
 task_model=
-task_port=8000
+task_port=$PI05_INFERENCE_PORT
 task_gpu=0
 task_host=127.0.0.1
 task_guard="$task_root/tools/vr_control_guard.py"
@@ -42,15 +45,19 @@ esac
 [[ "$task_gpu" =~ ^[0-9]+$ ]] || { echo 'GPU must be a numeric device index' >&2; exit 2; }
 case "$task_host" in
   127.0.0.1) ;;
-  192.168.26.20)
-    ip -4 addr show | grep -F 'inet 192.168.26.20/' >/dev/null || {
+  "$PI05_WORKSTATION_HOST")
+    ip -4 addr show | grep -F "inet $PI05_WORKSTATION_HOST/" >/dev/null || {
       echo 'Robot LAN address 192.168.26.20 is not assigned' >&2; exit 2;
     }
     echo 'WARNING: OpenPI WebSocket has no authentication; use only on the isolated robot LAN.' >&2 ;;
   *) echo 'Host must be loopback or Qi robot LAN address' >&2; exit 2 ;;
 esac
 
-task_checkpoint="$task_root/models/$task_model/19999"
+task_model_exports=$(python3 "$PI05_COMMON_DIR/robot_profile.py" --model-shell --model "$task_model" --project-root "$task_root/..")
+eval "$task_model_exports"
+task_config=$PI05_MODEL_CONFIG
+task_asset=$PI05_MODEL_ASSET
+task_checkpoint=$PI05_MODEL_CHECKPOINT
 test -s "$task_checkpoint/params/manifest.ocdbt" || {
   echo "Missing checkpoint manifest: $task_checkpoint" >&2; exit 2;
 }
@@ -78,7 +85,7 @@ if test "$task_mode" = --start; then
       mapfile -d '' -t task_cmdline < "/proc/$task_pid/cmdline"
       task_expected=("$task_root/envs/pi05/bin/python" -u "$task_root/tools/serve_inference.py"
                      --config "$task_config" --checkpoint "$task_checkpoint"
-                     --port "$task_port" --host "$task_host")
+                     --port "$task_port" --host "$task_host" --robot-profile "$PI05_ROBOT_PROFILE" --profile-hash "$PI05_PROFILE_HASH")
       if test "$task_address" = "$task_host:$task_port" &&
          test "${#task_cmdline[@]}" -eq "${#task_expected[@]}"; then
         task_same_instance=true
@@ -97,7 +104,7 @@ if test "$task_mode" = --start; then
       if test "$task_same_instance" = true; then
         task_parent=$(ps -o ppid= -p "$task_pid" | tr -d '[:space:]')
         task_guard_found=false
-        task_expected_guard=("$task_root/envs/pi05/bin/python" -u "$task_guard" --watch)
+        task_expected_guard=("$task_root/envs/pi05/bin/python" -u "$task_guard" --watch --robot-profile "$PI05_ROBOT_PROFILE" --profile-hash "$PI05_PROFILE_HASH")
         for task_peer in $(pgrep -P "$task_parent" || true); do
           test -r "/proc/$task_peer/cmdline" || continue
           mapfile -d '' -t task_peer_cmdline < "/proc/$task_peer/cmdline"
@@ -151,7 +158,7 @@ fi
 # The vendor launcher registers a latched arm-target publisher even when VR is
 # idle. Shut down that exact node before exposing inference, then keep checking
 # for a controller restart. The lower bridge independently rejects competitors.
-"$task_root/envs/pi05/bin/python" -u "$task_guard" --once
+"$task_root/envs/pi05/bin/python" -u "$task_guard" --once --robot-profile "$PI05_ROBOT_PROFILE" --profile-hash "$PI05_PROFILE_HASH"
 
 mkdir -p "$task_root/envs/tmp" "$task_root/envs/cache/jax"
 export TMPDIR="$task_root/envs/tmp"
@@ -174,11 +181,11 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-"$task_root/envs/pi05/bin/python" -u "$task_guard" --watch &
+"$task_root/envs/pi05/bin/python" -u "$task_guard" --watch --robot-profile "$PI05_ROBOT_PROFILE" --profile-hash "$PI05_PROFILE_HASH" &
 task_guard_pid=$!
 "$task_root/envs/pi05/bin/python" -u "$task_root/tools/serve_inference.py" \
   --config "$task_config" --checkpoint "$task_checkpoint" \
-  --port "$task_port" --host "$task_host" &
+  --port "$task_port" --host "$task_host" --robot-profile "$PI05_ROBOT_PROFILE" --profile-hash "$PI05_PROFILE_HASH" &
 task_server_pid=$!
 
 # Either a dead model server or a lost VR guard ends this inference session.

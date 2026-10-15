@@ -3,6 +3,7 @@
   <arg name="left_serial" default="412622270772"/>
   <arg name="right_serial" default="412622271095"/>
   <arg name="head_serial" default="CP2H163000H0"/>
+  <arg name="head_rotation" default="180"/>
 
   <include file="$(find realsense2_camera)/launch/rs_camera.launch">
     <arg name="camera" value="left_wrist_camera"/>
@@ -25,7 +26,7 @@
     <arg name="serial_number" value="$(arg head_serial)"/>
     <arg name="enable_depth" value="false"/>
     <arg name="color_format" value="YUYV"/>
-    <arg name="color_rotation" value="180"/>
+    <arg name="color_rotation" value="$(arg head_rotation)"/>
     <arg name="color_width" value="848"/>
     <arg name="color_height" value="480"/>
     <arg name="color_fps" value="30"/>

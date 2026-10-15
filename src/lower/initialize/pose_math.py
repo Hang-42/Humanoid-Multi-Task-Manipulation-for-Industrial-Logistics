@@ -1,7 +1,18 @@
-"""Validated v53 pose profiles and FK checks; no actuator interfaces."""
+"""Configured Kuavo pose profiles and FK checks; no actuator interfaces."""
 import math
 import xml.etree.ElementTree as ET
 import numpy as np
+import sys
+import os
+from pathlib import Path
+for _parent in Path(__file__).resolve().parents:
+    _common = Path(os.environ.get('PI05_COMMON_DIR', str(_parent / 'common')))
+    if (_common / 'robot_profile.py').is_file():
+        sys.path.insert(0, str(_common))
+        break
+from robot_profile import active_profile
+ROBOT_PROFILE = active_profile()
+
 
 
 def rotation(axis, angle):
@@ -44,7 +55,13 @@ class ArmFK:
             turn = np.eye(4)
             turn[:3,:3] = rotation([float(x) for x in joint.find('axis').get('xyz').split()],math.radians(q))
             transform = transform @ turn
-        transform = transform @ origin(self.joints['zarm_%s7_end_effector_joint' % side])
+        tool = ROBOT_PROFILE['tool']
+        transform = transform @ origin(self.joints[tool['end_joint_pattern'] % side])
+        prefix = 'left' if side == 'l' else 'right'
+        offset = ET.Element('joint')
+        ET.SubElement(offset, 'origin', xyz=' '.join(map(str, tool[prefix+'_xyz'])),
+                      rpy=' '.join(map(str, tool[prefix+'_rpy'])))
+        transform = transform @ origin(offset)
         points['modeled_hand_tip'] = transform[:3,3].copy()
         return {name: point.tolist() for name, point in points.items()}
 
@@ -65,7 +82,7 @@ def side_raise_plan(fk, q_deg, base_xyz, base_ypr, waist_rad):
     initial = np.array(q_deg, dtype=float)
     target = initial.copy()
     for side, offset, sign in (('l',0,1),('r',7,-1)):
-        target[offset:offset+4] = [0, sign*90, 0, -5]
+        target[offset:offset+4] = SIDE[offset:offset+4]
     times = [.5] + [.5 + i/10 for i in range(1,81)] + [9.5]
     frames = [initial.tolist()] + [(initial + smooth(i/80)*(target-initial)).tolist() for i in range(1,81)] + [target.tolist()]
     for frame in frames:
@@ -88,12 +105,12 @@ def high_fold_plan(fk, q_deg, base_xyz, base_ypr, waist_rad):
     initial = np.array(q_deg, dtype=float)
     target = initial.copy()
     for offset, sign in ((0,1),(7,-1)):
-        target[offset:offset+4] = [-90, sign*90, 0, -90]
+        target[offset:offset+4] = FOLDED[offset:offset+4]
     times = [.5] + [.5 + i/10 for i in range(1,121)] + [13.5]
     frames = [initial.tolist()] + [(initial + smooth(i/120)*(target-initial)).tolist() for i in range(1,121)] + [target.tolist()]
     speed = 1.875*float(np.max(np.abs(target-initial)))/12
-    if speed > 20:
-        raise RuntimeError('High fold exceeds 20 degree/s')
+    if speed > ROBOT_PROFILE['safety']['arm_speed_deg_s']:
+        raise RuntimeError('High fold exceeds configured arm speed')
     sampled = {s:[] for s in ('l','r')}
     for frame in frames:
         fk.check_limits(frame)
@@ -128,7 +145,7 @@ def high_inward_plan(fk, q_deg, base_xyz, base_ypr, waist_rad):
     folded = initial.copy()
     target = CHEST_HIGH.copy()
     for side, offset, sign in (('l',0,1),('r',7,-1)):
-        folded[offset:offset+4] = [-90, sign*90, 0, -90]
+        folded[offset:offset+4] = FOLDED[offset:offset+4]
     times = [.5]
     frames = [initial.tolist()]
     for i in range(1,121):
@@ -146,8 +163,8 @@ def high_inward_plan(fk, q_deg, base_xyz, base_ypr, waist_rad):
             sampled[side].append(fk.points(frame[offset:offset+7],side,base_xyz,base_ypr,waist_rad))
     speed1 = 1.875*float(np.max(np.abs(folded-initial)))/12
     speed2 = 1.875*float(np.max(np.abs(target-folded)))/8
-    if max(speed1,speed2) > 20:
-        raise RuntimeError('High inward path exceeds 20 degree/s')
+    if max(speed1,speed2) > ROBOT_PROFILE['safety']['arm_speed_deg_s']:
+        raise RuntimeError('High inward path exceeds configured arm speed')
     minima = {s:{key:min(p[key][2] for p in points) for key in ('elbow','wrist','modeled_hand_tip')}
               for s,points in sampled.items()}
     endpoints = {s:points[-1] for s,points in sampled.items()}
@@ -171,20 +188,17 @@ def high_inward_plan(fk, q_deg, base_xyz, base_ypr, waist_rad):
             'collision_check':'Height checks only; no calibrated obstacle bounds or full hand collision geometry.'}
 
 
-SIDE = np.array([0,90,0,-5,0,0,0,0,-90,0,-5,0,0,0], dtype=float)
-FOLDED = np.array([-90,90,0,-90,0,0,0,-90,-90,0,-90,0,0,0], dtype=float)
+SIDE = np.array(ROBOT_PROFILE.pose('side'), dtype=float)
+FOLDED = np.array(ROBOT_PROFILE.pose('folded'), dtype=float)
 # Stable first pose from data/灵巧手go.bag (/kuavo_arm_traj, 0.00-0.87 s).
 # Keep this as the single endpoint used by planning and pose classification so
 # initialization presents the same arm state that the VLA demonstrations use.
-CHEST_HIGH = np.array([
-    -10.236, 8.632, 3.001, -94.519, -29.750, -6.363, 14.860,
-    -22.051, -6.009, 6.231, -80.351, 27.464, 13.436, 8.091,
-], dtype=float)
+CHEST_HIGH = np.array(ROBOT_PROFILE.pose('chest_high'), dtype=float)
 # The recorded pre-pose is lower than the temporary folded waypoint. This is
 # an explicit path bound, not a collision guarantee; the live scene still
 # needs checking before motion.
-BAG_PREPOSE_WRIST_DROP_LIMIT_M = .55
-POSE_TOLERANCE = np.array([8,5,3,4,5,5,5]*2, dtype=float)
+BAG_PREPOSE_WRIST_DROP_LIMIT_M = ROBOT_PROFILE['safety']['startup_wrist_drop_limit_m']
+POSE_TOLERANCE = np.array(ROBOT_PROFILE['safety']['pose_tolerance_deg'], dtype=float)
 
 
 def classify_pose(q_deg):
@@ -194,11 +208,8 @@ def classify_pose(q_deg):
     for name, reference in (('chest_high',CHEST_HIGH),('folded_high',FOLDED),('side',SIDE)):
         if np.all(np.abs(q-reference) <= POSE_TOLERANCE):
             return name
-    down = True
-    for first in (0,7):
-        down = down and (-5 <= q[first] <= 20 and abs(q[first+1]) <= 12
-                         and abs(q[first+2]) <= 5 and -35 <= q[first+3] <= 1
-                         and np.max(np.abs(q[first+4:first+7])) <= 5)
+    down = all(low <= value <= high for value, (low, high) in
+               zip(q, ROBOT_PROFILE['poses']['arms_down_bounds_deg']))
     return 'arms_down' if down else 'unknown'
 
 
@@ -210,8 +221,8 @@ def inward_only_plan(fk, q_deg, base_xyz, base_ypr, waist_rad):
     for frame in frames:
         fk.check_limits(frame)
     speed = 1.875*float(np.max(np.abs(target-initial)))/8
-    if speed > 20:
-        raise RuntimeError('Inward-only profile exceeds 20 degree/s')
+    if speed > ROBOT_PROFILE['safety']['arm_speed_deg_s']:
+        raise RuntimeError('Inward-only profile exceeds configured arm speed')
     for side, first in (('l',0),('r',7)):
         pts = [fk.points(f[first:first+7],side,base_xyz,base_ypr,waist_rad) for f in frames]
         if min(p['wrist'][2] for p in pts) < pts[0]['wrist'][2]-BAG_PREPOSE_WRIST_DROP_LIMIT_M:

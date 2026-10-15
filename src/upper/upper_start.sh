@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -Ee -o pipefail
+task_common_candidate="$(dirname -- "${BASH_SOURCE[0]}")/common/profile.sh"
+if ! test -r "$task_common_candidate"; then task_common_candidate="$(dirname -- "${BASH_SOURCE[0]}")/../common/profile.sh"; fi
+source "$task_common_candidate"
+profile_args "$@"
+set -- "${PI05_PROFILE_ARGS[@]}"
 
 task_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 case "${1:-}" in
@@ -10,10 +15,10 @@ case "${1:-}" in
   *) echo 'Usage: ./upper_start.sh [--check|--preflight|--health|--start]' >&2; exit 2 ;;
 esac
 source /opt/ros/noetic/setup.bash
-source /home/leju_kuavo/kuavo_ros_application/devel/setup.bash
+source "$PI05_UPPER_WORKSPACE/devel/setup.bash"
 set -u
-export ROS_MASTER_URI=http://192.168.26.1:11311
-export ROS_IP=192.168.26.12
+export ROS_MASTER_URI="$LOWER_ROS_MASTER_URI"
+export ROS_IP="$PI05_UPPER_IP"
 unset ROS_HOSTNAME
 export ROS_PACKAGE_PATH="$task_dir${ROS_PACKAGE_PATH:+:$ROS_PACKAGE_PATH}"
 
@@ -63,4 +68,6 @@ if test "$task_mode" = preflight; then
   exit 0
 fi
 
-exec roslaunch "$task_dir/start_camera.launch"
+exec roslaunch "$task_dir/start_camera.launch" \
+  left_serial:="$PI05_CAMERA_LEFT_SERIAL" right_serial:="$PI05_CAMERA_RIGHT_SERIAL" \
+  head_serial:="$PI05_CAMERA_HEAD_SERIAL" head_rotation:="$PI05_HEAD_DRIVER_ROTATION"

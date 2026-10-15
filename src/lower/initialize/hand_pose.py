@@ -1,6 +1,17 @@
 """Guarded hand initialization and thumb-only optical trials."""
 import math
 import time
+import sys
+import os
+from pathlib import Path
+for _parent in Path(__file__).resolve().parents:
+    _common = Path(os.environ.get('PI05_COMMON_DIR', str(_parent / 'common')))
+    if (_common / 'robot_profile.py').is_file():
+        sys.path.insert(0, str(_common))
+        break
+from robot_profile import active_profile
+ROBOT_PROFILE = active_profile()
+
 
 HAND_NAMES = tuple('%s_%s' % (side,finger) for side in ('l','r')
                    for finger in ('thumb','thumb_aux','index','middle','ring','pinky'))
@@ -8,9 +19,9 @@ THUMB_INDICES = (0,6)
 # Actual /dexhand/state feedback saved at the user's request on 2026-10-07.
 # Order per hand: thumb, thumb_aux, index, middle, ring, pinky.
 # Command units [0,100], not degrees. Auxiliary feedback was 99, not 100.
-INITIAL_HAND_POSITION = (15,99,0,0,0,0,15,99,0,0,0,0)
+INITIAL_HAND_POSITION = tuple(ROBOT_PROFILE['end_effector']['initial'])
 INITIAL_THUMB = INITIAL_HAND_POSITION[0]
-INITIAL_THUMB_AUX = INITIAL_HAND_POSITION[1]
+INITIAL_THUMB_AUX = INITIAL_HAND_POSITION[1] if ROBOT_PROFILE.hand_size == 12 else None
 
 
 def hand_waypoints(current, target):
@@ -65,7 +76,7 @@ class ThumbMover:
         self.lock = threading.Lock()
         self.feedback = None
         self.conflict = False
-        self.subs = [rospy.Subscriber('/dexhand/state',JointState,self.store,queue_size=1)]
+        self.subs = [rospy.Subscriber(ROBOT_PROFILE['end_effector']['state_topic'],JointState,self.store,queue_size=1)]
         for topic in ('/control_robot_hand_position','/dexhand/command'):
             self.subs.append(rospy.Subscriber(topic,rospy.AnyMsg,self.observe,queue_size=10))
         self.pub = None
@@ -119,7 +130,7 @@ class ThumbMover:
                 raise RuntimeError('Another hand publisher is registered')
             if max(abs(waypoints[-1][i]-start[i]) for i in controlled)<=2:
                 return {'already_at_target':True,'start':start,'target':waypoints[-1],'actual':start}
-            self.pub = self.rospy.Publisher('/control_robot_hand_position',self.message,queue_size=1,latch=False)
+            self.pub = self.rospy.Publisher(ROBOT_PROFILE['end_effector']['command_topic'],self.message,queue_size=1,latch=False)
             deadline = time.monotonic()+5
             while self.pub.get_num_connections()==0:
                 if time.monotonic()>=deadline:

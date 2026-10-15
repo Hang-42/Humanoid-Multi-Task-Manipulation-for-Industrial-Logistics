@@ -19,13 +19,15 @@ from websockets.sync.client import connect
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'src/common'))
+from robot_profile import active_profile, STATE_CONTRACT
+ROBOT_PROFILE = active_profile()
 sys.path.insert(0, str(ROOT / 'src' / 'lower'))
 from protocol import read_observation, send_response  # noqa: E402
 
 
 CAMERAS = ('head_cam_h', 'wrist_cam_l', 'wrist_cam_r')
-ROTATIONS = {'head_cam_h': 180, 'wrist_cam_l': 0, 'wrist_cam_r': 0}
-STATE_CONTRACT = 'q[13:20],l_thumb/100,q[20:27],r_thumb/100'
+ROTATIONS = ROBOT_PROFILE['cameras']['rotations']
 TASKS = {
     'kd12': ('pi05_kuavo_kd_fsdp8', 'kuavo_kd',
              'Place each parcel on the digital scale to weigh it, then move it into the blue bin.'),
@@ -39,8 +41,10 @@ TASKS = {
 
 
 def model_spec(model):
-    config, asset, prompt = TASKS[model]
-    checkpoint = (ROOT / 'pi05' / 'models' / model / '19999').resolve()
+    ROBOT_PROFILE.require_ready(model)
+    spec = ROBOT_PROFILE['models'][model]
+    config, asset, prompt = spec['config'], spec['asset'], TASKS[model][2]
+    checkpoint = (ROOT / spec['checkpoint']).resolve()
     if not (checkpoint / 'params' / 'manifest.ocdbt').is_file():
         raise RuntimeError('Model checkpoint is missing: ' + str(checkpoint))
     if not (checkpoint / 'assets' / asset / 'norm_stats.json').is_file():
@@ -67,8 +71,10 @@ def observation(meta, jpeg, task):
     state = np.asarray(meta.get('state'), dtype=np.float32)
     if state.shape != (16,) or not np.isfinite(state).all():
         raise ValueError('Expected finite 16-dimensional state')
-    if meta.get('state_contract') != STATE_CONTRACT:
+    legacy = ROBOT_PROFILE.data.get('legacy_records_allowed') and meta.get('state_contract') == 'q[13:20],l_thumb/100,q[20:27],r_thumb/100'
+    if meta.get('state_contract') != STATE_CONTRACT and not legacy:
         raise ValueError('Unexpected state contract')
+    ROBOT_PROFILE.require_record(meta)
     if meta.get('camera_rotations_degrees') != ROTATIONS:
         raise ValueError('Unexpected camera orientation')
     ages = meta.get('ages')
@@ -90,6 +96,9 @@ def connect_policy(url, task):
                  close_timeout=2)
     try:
         metadata = msgpack_numpy.unpackb(ws.recv(timeout=5))
+        ROBOT_PROFILE.require_record(metadata)
+        if metadata.get('state_contract', STATE_CONTRACT) != STATE_CONTRACT:
+            raise RuntimeError('Policy state/action contract mismatch')
         if not isinstance(metadata, dict) or (metadata.get('pi05_config'),
                                               metadata.get('pi05_checkpoint')) != (
                                                   task['config'], task['checkpoint']):
@@ -130,7 +139,7 @@ def warmup(url, task):
 def serve(url, task):
     # Bind only to Qi's robot LAN. Do not expose the unauthenticated protocol
     # on Wi-Fi or localhost, and accept only the lower computer as a peer.
-    host, port = '192.168.26.20', 19092
+    host, port = ROBOT_PROFILE['network']['workstation_ip'], ROBOT_PROFILE['network']['proxy_port']
     packer = msgpack_numpy.Packer()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -140,7 +149,7 @@ def serve(url, task):
         while True:
             conn, peer = server.accept()
             with conn:
-                if peer[0] != '192.168.26.1':
+                if peer[0] != ROBOT_PROFILE['network']['lower_ip']:
                     print('REJECTED_PEER ' + peer[0], flush=True)
                     continue
                 print('ROBOT_CONNECTED peer=' + peer[0], flush=True)
@@ -166,6 +175,7 @@ def local_contract_check(task):
         frame.save(out, format='JPEG')
         jpeg = out.getvalue()
     meta = {'state': [0.0] * 16, 'state_contract': STATE_CONTRACT,
+            'robot_identity': ROBOT_PROFILE.identity,
             'camera_rotations_degrees': ROTATIONS,
             'ages': {name: 0.1 for name in (*CAMERAS, 'state')}}
     data = observation(meta, [jpeg] * 3, task)
@@ -185,14 +195,19 @@ def local_contract_check(task):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--robot-profile')
+    parser.add_argument('--profile-hash')
     parser.add_argument('--model', choices=tuple(TASKS), default='kd12')
-    parser.add_argument('--upstream', default='ws://127.0.0.1:8000')
+    expected_upstream = 'ws://127.0.0.1:%d' % ROBOT_PROFILE['network']['inference_port']
+    parser.add_argument('--upstream', default=expected_upstream)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--check', action='store_true')
     modes.add_argument('--self-test', action='store_true')
     modes.add_argument('--start', action='store_true')
     args = parser.parse_args()
-    if args.upstream != 'ws://127.0.0.1:8000':
+    if args.profile_hash and args.profile_hash != ROBOT_PROFILE.digest:
+        parser.error('Profile file changed since launch')
+    if args.upstream != expected_upstream:
         parser.error('Only the local OpenPI server is supported')
     task = model_spec(args.model)
     print('PROXY_MODEL %s config=%s' % (task['model'], task['config']), flush=True)

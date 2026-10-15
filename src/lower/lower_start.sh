@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Foreground PI05 lower bridge. Robot motion requires an explicit --execute.
 set -Ee -o pipefail
+task_common_candidate="$(dirname -- "${BASH_SOURCE[0]}")/common/profile.sh"
+if ! test -r "$task_common_candidate"; then task_common_candidate="$(dirname -- "${BASH_SOURCE[0]}")/../common/profile.sh"; fi
+source "$task_common_candidate"
+profile_args "$@"
+set -- "${PI05_PROFILE_ARGS[@]}"
 
 task_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 if test "${1:-}" = --help || test "${1:-}" = -h; then
@@ -15,7 +20,7 @@ fi
 task_args=("$@")
 set --
 source /opt/ros/noetic/setup.bash
-source /home/lab/kuavo-ros-opensource/devel/setup.bash
+source "$PI05_VENDOR_WORKSPACE/devel/setup.bash"
 set -- "${task_args[@]}"
 unset task_args
 set -u
@@ -25,7 +30,7 @@ export ROS_IP="${LOWER_ROS_IP:-192.168.26.1}"
 export ROS_PACKAGE_PATH="$task_dir${ROS_PACKAGE_PATH:+:$ROS_PACKAGE_PATH}"
 export LD_LIBRARY_PATH="/opt/drake/lib:${LD_LIBRARY_PATH:-}"
 export PYTHONDONTWRITEBYTECODE=1
-export PI05_LOWER_INITIALIZE_DIR="${PI05_LOWER_INITIALIZE_DIR:-/home/lab/kuavo_pi05_lower/initialize}"
+export PI05_LOWER_INITIALIZE_DIR="$PI05_LOWER_ROOT/initialize"
 unset ROS_HOSTNAME
 
 task_host="${PI05_WORKSTATION_HOST:-192.168.26.20}"
@@ -40,6 +45,7 @@ test "$(rospack find lower)" = "$task_dir" || {
 }
 test -r "$PI05_LOWER_INITIALIZE_DIR/robot_runtime.py"
 test -r "$PI05_LOWER_INITIALIZE_DIR/hand_pose.py"
+test -r "$PI05_LOWER_INITIALIZE_DIR/hand_force_setup.py"
 python3 -c 'import rospy, rosgraph, numpy, PIL, sensor_msgs.msg, kuavo_msgs.msg, kuavo_msgs.srv, ocs2_msgs.msg'
 
 if test "${1:-}" = --check; then

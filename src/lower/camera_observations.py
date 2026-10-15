@@ -18,6 +18,8 @@ from sensor_msgs.msg import JointState
 from kuavo_msgs.msg import sensorsData
 from observation import CAMERA_ROTATIONS, make_model_state, orient_camera_rgb
 from camera_codec import decode_rgb_jpeg
+from robot_profile import active_profile, STATE_CONTRACT
+ROBOT_PROFILE = active_profile()
 
 
 MAGIC = b"SVSHAD01"
@@ -94,7 +96,7 @@ class Latest:
 
     def joint(self, msg: sensorsData) -> None:
         q = [float(v) for v in msg.joint_data.joint_q]
-        if len(q) != 29 or not np.isfinite(q).all():
+        if len(q) != ROBOT_PROFILE['joints']['sensor_count'] or not np.isfinite(q).all():
             rospy.logwarn_throttle(10.0, "unexpected joint_q: len=%d", len(q))
             return
         stamp = time.monotonic()
@@ -109,6 +111,10 @@ class Latest:
         stamp = time.monotonic()
         with self.lock:
             self.hands = (stamp, values)
+
+    def end_effector(self, values, stamp):
+        with self.lock:
+            self.hands = (stamp, list(values))
 
     def packet(self, max_age: float) -> bytes | None:
         with self.lock:
@@ -144,7 +150,8 @@ class Latest:
         meta = {
             "state": state,
             "camera_rotations_degrees": self.camera_rotations,
-            "state_contract": "q[13:20],l_thumb/100,q[20:27],r_thumb/100",
+            "state_contract": STATE_CONTRACT,
+            "robot_identity": ROBOT_PROFILE.identity,
             "ages": {
                 "head_cam_h": now - image_values["head_cam_h"][0],
                 "wrist_cam_l": now - image_values["wrist_cam_l"][0],
