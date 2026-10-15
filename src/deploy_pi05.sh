@@ -50,16 +50,62 @@ case "${1:-}" in
     task_inference_session="pi05-$task_model-inference"
     task_proxy_session="pi05-$task_model-proxy"
 
-    # A running camera release belongs to the operator. Reuse it only when it
-    # is the exact release requested by this checkout.
+    # Reuse the exact release only when its ROS registration and all three
+    # live camera topics are healthy. A process can survive a ROS master
+    # restart while its old registrations are gone, so the session itself is
+    # not sufficient evidence that the camera relay is usable.
     task_upper_version=$(cd "$task_upper" && sha256sum upper_start.sh start_camera.launch camera_relay.py camera_codec.py package.xml CMakeLists.txt | sha256sum | cut -c1-16)
     task_upper_release="/home/leju_kuavo/pi05_upper/releases/$task_upper_version/upper"
-    if ssh "${task_ssh[@]}" "$task_host" "tmux has-session -t '=$task_session' 2>/dev/null"; then
+    if ssh "${task_ssh[@]}" "$task_host" "tmux has-session -t '$task_session' 2>/dev/null"; then
       task_upper_state=$(ssh "${task_ssh[@]}" "$task_host" "tmux display-message -p -t '$task_session' '#{pane_dead}|#{pane_current_path}'")
-      test "$task_upper_state" = "0|$task_upper_release" || {
-        echo "Existing camera session is not this active release: $task_upper_state" >&2; exit 3;
-      }
-      echo "PI05_UPPER_ALREADY_RUNNING session=$task_session release=$task_upper_version"
+      if test "$task_upper_state" != "0|$task_upper_release"; then
+        if [[ "$task_upper_state" =~ ^[01]\|/home/leju_kuavo/pi05_upper/releases/[a-f0-9]{16}/upper$ ]]; then
+          task_old_upper_release=${task_upper_state#*|}
+          echo "PI05_UPPER_OLD_RELEASE session=$task_session release=${task_old_upper_release##*/releases/}; restarting the managed camera release" >&2
+          ssh "${task_ssh[@]}" "$task_host" "tmux send-keys -t '$task_session:0' C-c"
+          task_deadline=$(( $(date +%s) + 30 ))
+          while true; do
+            task_session_gone=false
+            if ! ssh "${task_ssh[@]}" "$task_host" "tmux has-session -t '$task_session' 2>/dev/null"; then
+              task_session_gone=true
+            fi
+            if test "$task_session_gone" = true &&
+               ssh "${task_ssh[@]}" "$task_host" "bash '$task_old_upper_release/upper_start.sh' --preflight" >/dev/null 2>&1; then
+              break
+            fi
+            (( $(date +%s) < task_deadline )) || {
+              echo 'Old camera session did not stop cleanly; inspect the upper computer before retrying.' >&2
+              exit 3
+            }
+            sleep 1
+          done
+          bash "$task_dir/deploy_pi05.sh" --start
+        else
+          echo "Existing camera session is not a managed PI05 release: $task_upper_state" >&2; exit 3
+        fi
+      elif ssh "${task_ssh[@]}" "$task_host" "bash '$task_upper_release/upper_start.sh' --health"; then
+        echo "PI05_UPPER_ALREADY_RUNNING session=$task_session release=$task_upper_version"
+      else
+        echo "PI05_UPPER_STALE session=$task_session; restarting the managed camera release" >&2
+        ssh "${task_ssh[@]}" "$task_host" "tmux send-keys -t '$task_session:0' C-c"
+        task_deadline=$(( $(date +%s) + 30 ))
+        while true; do
+          task_session_gone=false
+          if ! ssh "${task_ssh[@]}" "$task_host" "tmux has-session -t '$task_session' 2>/dev/null"; then
+            task_session_gone=true
+          fi
+          if test "$task_session_gone" = true &&
+             ssh "${task_ssh[@]}" "$task_host" "bash '$task_upper_release/upper_start.sh' --preflight" >/dev/null 2>&1; then
+            break
+          fi
+          (( $(date +%s) < task_deadline )) || {
+            echo 'Stale camera session did not stop cleanly; inspect the upper computer before retrying.' >&2
+            exit 3
+          }
+          sleep 1
+        done
+        bash "$task_dir/deploy_pi05.sh" --start
+      fi
     else
       bash "$task_dir/deploy_pi05.sh" --start
     fi
@@ -255,7 +301,7 @@ if test "$task_start" != true; then exit 0; fi
 # Check the live ROS master and camera-node ownership before creating a session.
 ssh "${task_ssh[@]}" "$task_host" "'$task_remote/upper_start.sh' --preflight"
 # An existing tmux session belongs to the operator; do not replace it.
-if ssh "${task_ssh[@]}" "$task_host" "tmux has-session -t '=$task_session' 2>/dev/null"; then
+if ssh "${task_ssh[@]}" "$task_host" "tmux has-session -t '$task_session' 2>/dev/null"; then
   echo "Session $task_session already exists; inspect it before starting another instance." >&2
   exit 3
 fi

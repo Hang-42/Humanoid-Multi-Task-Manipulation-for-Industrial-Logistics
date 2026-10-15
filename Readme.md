@@ -29,14 +29,17 @@ bash src/lower/robot_initialize.sh
 在现场人员值守、急停可立即操作、机器人稳定站立且运动范围内无人和障碍时，运行：
 
 ```bash
-./src/deploy_pi05.sh --pi05-live
-# 每次推理执行前 5 步，再获取新观测并重新推理：
 ./src/deploy_pi05.sh --pi05-live --steps 5
 ```
 
-`--steps` 可设置为 1–50，省略时默认执行 2 步。默认场景是 `kd12`；其他场景可加 `--model cz`、`--model lj` 或 `--model lp`，例如 `./src/deploy_pi05.sh --pi05-live --model cz --steps 5`。
+`--steps` 可设置为 1–50，省略时默认执行 2 步
 
-入口仍在开始动作前要求输入 `o`。运行中抓取闭合直接按 PI05 模型输出执行，不再逐次等待人工确认；关节、手指限幅和异常停止检查仍生效。按 Ctrl+C 停止并请求双臂保持。
+`--model` 默认场景是 `kd12`，其他场景可加 `--model cz`、`--model lj` 或 `--model lp`
+
+例如 `./src/deploy_pi05.sh --pi05-live --model cz --steps 5`
+启动前会检查相机中继是否已注册到当前 ROS master，以及三路话题是否有实时帧；检测到本项目管理的旧中继失效时会自动重启该相机会话。
+
+按 Ctrl+C 停止并请求双臂保持。
 
 ### 2.3 恢复初始化位置
 ```bash

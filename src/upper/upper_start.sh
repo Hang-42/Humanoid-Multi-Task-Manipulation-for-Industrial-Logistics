@@ -6,7 +6,8 @@ case "${1:-}" in
   ''|--start) task_mode=start ;;
   --check) task_mode=check ;;
   --preflight) task_mode=preflight ;;
-  *) echo 'Usage: ./upper_start.sh [--check|--preflight|--start]' >&2; exit 2 ;;
+  --health) task_mode=health ;;
+  *) echo 'Usage: ./upper_start.sh [--check|--preflight|--health|--start]' >&2; exit 2 ;;
 esac
 source /opt/ros/noetic/setup.bash
 source /home/leju_kuavo/kuavo_ros_application/devel/setup.bash
@@ -29,6 +30,28 @@ if test "$task_mode" = check; then
   exit 0
 fi
 rosnode list >/dev/null
+
+if test "$task_mode" = health; then
+  if ! rosnode list | grep -qx '/pi05_camera_relay'; then
+    echo 'PI05 camera relay is not registered with the current ROS master.' >&2
+    exit 3
+  fi
+  for task_topic in \
+      /pi05_camera/head_cam_h/compressed \
+      /pi05_camera/wrist_cam_l/compressed \
+      /pi05_camera/wrist_cam_r/compressed; do
+    if ! rostopic info "$task_topic" | grep -Eq '^[[:space:]]*\* /pi05_camera_relay[[:space:]]'; then
+      echo "PI05 camera topic has no relay publisher: $task_topic" >&2
+      exit 3
+    fi
+    timeout 5 rostopic echo -n 1 "$task_topic" >/dev/null || {
+      echo "PI05 camera topic has no fresh frame: $task_topic" >&2
+      exit 3
+    }
+  done
+  echo 'PI05_UPPER_HEALTH_OK'
+  exit 0
+fi
 
 # A second driver launch can evict active ROS nodes with the same names.
 if rosnode list | grep -Eq '^/(head_camera|left_wrist_camera|right_wrist_camera|pi05_camera_relay)(/|$)'; then
