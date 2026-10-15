@@ -30,10 +30,13 @@ bash src/lower/robot_initialize.sh
 
 ```bash
 ./src/deploy_pi05.sh --pi05-live
+# 每次推理执行前 5 步，再获取新观测并重新推理：
+./src/deploy_pi05.sh --pi05-live --steps 5
 ```
 
+`--steps` 可设置为 1–50，省略时默认执行 2 步。默认场景是 `kd12`；其他场景可加 `--model cz`、`--model lj` 或 `--model lp`，例如 `./src/deploy_pi05.sh --pi05-live --model cz --steps 5`。
 
-默认场景是 `kd12`；其他场景可在启动命令后加 `--model cz`、`--model lj` 或 `--model lp`
+入口仍在开始动作前要求输入 `o`。运行中抓取闭合直接按 PI05 模型输出执行，不再逐次等待人工确认；关节、手指限幅和异常停止检查仍生效。按 Ctrl+C 停止并请求双臂保持。
 
 ### 2.3 恢复初始化位置
 ```bash

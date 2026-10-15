@@ -15,15 +15,22 @@ case "${1:-}" in
   --pi05-live)
     shift
     task_model=kd12
+    task_steps=2
     while test "$#" -gt 0; do
       case "$1" in
         --model)
           test "$#" -ge 2 || { echo '--model needs a value' >&2; exit 2; }
           task_model=$2; shift 2 ;;
-        *) echo 'Usage: ./deploy_pi05.sh --pi05-live [--model {kd12|cz|lj|lp}]' >&2; exit 2 ;;
+        --steps)
+          test "$#" -ge 2 || { echo '--steps needs a value' >&2; exit 2; }
+          task_steps=$2; shift 2 ;;
+        *) echo 'Usage: ./deploy_pi05.sh --pi05-live [--model {kd12|cz|lj|lp}] [--steps 1..50]' >&2; exit 2 ;;
       esac
     done
     case "$task_model" in kd12|cz|lj|lp) ;; *) echo 'Unknown PI05 model' >&2; exit 2 ;; esac
+    [[ "$task_steps" =~ ^([1-9]|[1-4][0-9]|50)$ ]] || {
+      echo '--steps must be an integer from 1 to 50' >&2; exit 2;
+    }
     test -t 0 && test -r /dev/tty || {
       echo 'Live robot control requires an interactive terminal' >&2; exit 2;
     }
@@ -150,7 +157,7 @@ case "${1:-}" in
     # This query checks fresh observations, initialization and controller
     # ownership, but sends no robot command. Do not bypass a failed check.
     ssh "${task_ssh[@]}" "$task_lower_host" \
-      "sudo -n bash '$task_lower_release/lower_start.sh' --steps 2"
+      "sudo -n bash '$task_lower_release/lower_start.sh' --steps '$task_steps'"
     printf '%s\n' \
       "就绪：模型=$task_model；推理将持续运行，直到你按 Ctrl+C。" \
       '请现场确认机器人稳定站立、有人持续值守、急停可立即操作，运动范围内无人和障碍。' \
@@ -159,7 +166,7 @@ case "${1:-}" in
     IFS= read -r task_confirmation </dev/tty || exit 3
     test "$task_confirmation" = o || { echo '未确认，未启动机器人动作' >&2; exit 3; }
     exec ssh -tt "${task_ssh[@]}" "$task_lower_host" \
-      "sudo -n bash '$task_lower_release/lower_start.sh' --execute --steps 2 --confirm-grasp"
+      "sudo -n bash '$task_lower_release/lower_start.sh' --execute --steps '$task_steps'"
     ;;
   --lower-install)
     test "$#" -eq 1 || { echo 'Usage: ./deploy_pi05.sh --lower-install' >&2; exit 2; }

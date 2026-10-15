@@ -145,10 +145,9 @@ def retimed_plan(actions, measured_deg, hand_feedback, fk, steps=5,
 
 
 def grasp_window(actions, steps, confirmed_sides=()):
-    """Stop the prediction prefix at its first unconfirmed closing target.
+    """Locate the first closing target for the approach-only diagnostic.
 
-    This detects a requested close, not successful object contact. Success
-    must be checked onsite before permitting the remaining predictions.
+    This detects a requested close, not successful object contact.
     """
     known = set(confirmed_sides)
     for index, row in enumerate(np.asarray(actions)[:steps]):

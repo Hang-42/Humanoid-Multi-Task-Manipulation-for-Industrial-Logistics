@@ -7,7 +7,6 @@ import io
 import os
 from pathlib import Path
 import signal
-import select
 import socket
 import sys
 import time
@@ -31,7 +30,7 @@ from hand_pose import HAND_NAMES, ordered_hand_feedback, INITIAL_THUMB, INITIAL_
 from pose_math import classify_pose
 from camera_observations import Latest
 from action_safety import (CONTROLLED_HAND_INDICES, HELD_HAND_INDICES,
-                           MAX_EXECUTION_STEPS, bounded_plan, retimed_plan, grasp_window,
+                           MAX_EXECUTION_STEPS, bounded_plan, retimed_plan,
                            approach_window, check_initialization)
 from protocol import read_response, send_exact, read_observation
 from arm_ack import TIMED_CONTROLLER, require_timed_controller, command_connections_ready, ack_summary
@@ -74,45 +73,10 @@ def action_profile(actions):
     }
 
 
-def delay_unconfirmed_closure(actions, steps, confirmed_sides, delay_steps):
-    """Hold an unconfirmed hand open for a few model frames before closing.
-
-    The arm continues along the model path while only the hand scalar is held
-    at its pre-close value.  This is an explicit experiment for a close that
-    coincides with surface contact; the normal path is unchanged when the
-    delay is zero.
-    """
-    if delay_steps <= 0:
-        return actions, steps, []
-    a = np.asarray(actions, dtype=float).copy()
-    confirmed = set(confirmed_sides)
-    details = []
-    execute_steps = steps
-    for side, column in enumerate((7, 15)):
-        if side in confirmed:
-            continue
-        indices = np.flatnonzero(a[:steps, column] >= .5)
-        if not len(indices):
-            continue
-        first = int(indices[0])
-        close = min(first + delay_steps, len(a) - 1)
-        if close <= first:
-            continue
-        hold = float(a[first - 1, column]) if first else 0.0
-        a[first:close, column] = hold
-        execute_steps = max(execute_steps, close + 1)
-        details.append(dict(side='left' if side == 0 else 'right',
-                            original_close_frame_1based=first + 1,
-                            delayed_close_frame_1based=close + 1,
-                            held_scalar=hold))
-    return a.tolist(), execute_steps, details
-
-
 class LiveRobot:
     def __init__(self, args):
         self.args = args
         self.owned = False
-        self.confirmed_grasps = set()
         self.last_phase_check = 0
         self.last_mode_check = 0
         self.initial_hands = None
@@ -161,8 +125,7 @@ class LiveRobot:
         emit('LIVE_PREFLIGHT_OK',thumbs=[self.initial_hands[i] for i in (0,6)],
              hand_channel_names=list(HAND_NAMES),hand_feedback=list(self.initial_hands),
              duration_seconds=args.duration,execution_steps_per_inference=args.steps,
-             retime=args.retime, confirm_grasp=args.confirm_grasp,
-             delay_close_steps=args.delay_close_steps,approach_only=args.approach_only)
+             retime=args.retime,approach_only=args.approach_only)
 
     def prepare_arm_mode_handoff(self, arm_deg):
         mode = rospy.ServiceProxy('/humanoid_get_arm_ctrl_mode',changeArmCtrlMode)(0).mode
@@ -505,40 +468,7 @@ class LiveRobot:
              max_arm_endpoint_error_deg=float(np.max(np.abs(measured-frames[-1]))),
              thumb_targets=[hands[-1][i] for i in (0,6)],
              hand_targets=hands[-1],hand_feedback=actual)
-        for side,index in enumerate((0,6)):
-            if actual[index] <= 20:
-                self.confirmed_grasps.discard(side)
         return complete
-
-    def wait_for_grasp_confirmation(self, sides, deadline=None):
-        try:
-            save_grasp_evidence(self.latest,self.robot.directory,sides,
-                                self.hands(),self.last_arm_target)
-        except Exception as exc:
-            emit('GRASP_EVIDENCE_SAVE_FAILED',error=str(exc))
-        # Evidence failure never releases the onsite confirmation gate.
-        names = ['left' if side == 0 else 'right' for side in sides]
-        emit('GRASP_CONFIRMATION_REQUIRED', sides=names,
-             hand_feedback=self.hands(),
-             instruction='Check the object onsite: y = grasp verified, n = stop; Ctrl+C also stops')
-        while True:
-            self.guard()
-            if deadline is not None and time.monotonic() >= deadline:
-                emit('GRASP_CONFIRMATION_TIME_LIMIT')
-                return False
-            readable, _, _ = select.select([sys.stdin], [], [], .05)
-            if not readable:
-                continue
-            answer = sys.stdin.readline()
-            require(bool(answer), 'Confirmation terminal closed; no further model actions permitted')
-            answer = answer.strip().lower()
-            if answer == 'y':
-                self.confirmed_grasps.update(sides)
-                emit('GRASP_CONFIRMED_ONSITE', sides=names)
-                return True
-            if answer in ('n', 'q'):
-                raise RuntimeError('Grasp was not confirmed onsite; remaining model actions withheld')
-            emit('GRASP_CONFIRMATION_INPUT', instruction='Enter y after verifying the grasp, or n to stop')
 
     def hold(self):
         if self.owned:
@@ -605,11 +535,6 @@ def parse_arguments(argv=None):
                         help='With --approach-only, keep hands open and follow up to N model frames beyond the first closing pose')
     parser.add_argument('--retime',action='store_true',
                         help='Preserve model targets by slowing playback within the existing speed caps')
-    parser.add_argument('--confirm-grasp',action='store_true',
-                        help='Pause at an unconfirmed closing target; require onsite y/n before continuing')
-    parser.add_argument('--delay-close-steps',type=int,default=0,
-                        choices=range(0,11),metavar='N',
-                        help='Hold an unconfirmed hand open for N model frames while the arm continues')
     parser.add_argument('--steps',type=int,default=DEFAULT_EXECUTION_STEPS,
                         choices=range(1,MAX_EXECUTION_STEPS+1),metavar='N',
                         help='Actions to execute per prediction: 1..50, default 5 (10 Hz)')
@@ -640,16 +565,13 @@ def main():
     args=parse_arguments()
     if args.single_step:
         require(args.execute and not (args.retime or args.approach_only or
-                                     args.confirm_grasp or args.delay_close_steps or
                                      args.approach_extra_steps),
                 '--single-step requires --execute and cannot combine with other rollout modes')
         args.steps=1
     require(args.duration is None or 1<=args.duration<=600,
             'Duration must be 1..600 seconds when specified')
-    if args.execute and args.confirm_grasp:
-        require(sys.stdin.isatty(),'--confirm-grasp requires an interactive terminal')
-    require(not args.approach_only or (args.retime and args.delay_close_steps==0),
-            '--approach-only requires --retime and --delay-close-steps 0')
+    require(not args.approach_only or args.retime,
+            '--approach-only requires --retime')
     require(args.approach_only or args.approach_extra_steps==0,
             '--approach-extra-steps requires --approach-only')
     socket.setdefaulttimeout(5)
@@ -697,7 +619,6 @@ def main():
                         break
                     emit('MODEL_WINDOW_DIAGNOSTIC',
                          **prediction_window_diagnostic(response['actions'],steps))
-                    pending=[]
                     window_actions=response['actions']
                     if args.approach_only:
                         steps, closing_step, applied_extra_steps = approach_window(
@@ -707,14 +628,6 @@ def main():
                              requested_extra_steps=args.approach_extra_steps,
                              applied_extra_steps=applied_extra_steps,
                              execution_model_steps=steps)
-                    elif args.confirm_grasp:
-                        window_actions, delayed_steps, delay_details = delay_unconfirmed_closure(
-                            window_actions, steps, robot.confirmed_grasps,
-                            args.delay_close_steps)
-                        if delay_details:
-                            emit('GRASP_CLOSE_DELAYED', details=delay_details,
-                                 requested_steps=steps, execution_steps=delayed_steps)
-                        steps,pending=grasp_window(window_actions,delayed_steps,robot.confirmed_grasps)
                     if args.retime:
                         complete=robot.execute(window_actions,steps,end)
                     else:
@@ -734,9 +647,6 @@ def main():
                              first_closing_action_1based=closing_step,
                              applied_extra_steps=applied_extra_steps)
                         break
-                    if pending and complete:
-                        if not robot.wait_for_grasp_confirmation(pending,end):
-                            break
                     if end is not None and time.monotonic()>=end:
                         break
                     started=send_observation(sock,robot)

@@ -7,7 +7,7 @@ if test "${1:-}" = --help || test "${1:-}" = -h; then
     printf '%s\n' 'Usage: ./lower_start.sh [--check | bridge options]' \
         '--check: verify the local ROS/package/runtime environment without connecting to the model' \
         'Default bridge run: read-only model query; --execute explicitly enables guarded robot motion.' \
-        'Bridge options include --host, --port, --duration, --steps, --retime, --confirm-grasp.'
+        'Bridge options include --host, --port, --duration, --steps, --retime.'
     exit 0
 fi
 
