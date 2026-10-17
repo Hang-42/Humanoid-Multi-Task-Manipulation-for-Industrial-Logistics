@@ -42,6 +42,10 @@ MODEL="kd12"
 ```
 支持任务参数 `kd12`、`cz`、`lj`、`lp`
 
+V53 + lejuclaw 使用 `configs/robots/v53_lejuclaw.json`，已启用 `lj/lp/cz`；
+V55 + Linker Hand 使用 `configs/robots/v55_linker_hand.json`，已启用四个任务。
+模型映射与启用依据见 [工作站配置说明](docs/WORKSTATION_ENV_AND_MODELS.md)。
+
 
 
 ## 2. 机器人站立与双臂初始化

@@ -66,7 +66,9 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(p['end_effector']['current_setup'], 'vendor')
         self.assertFalse(p['legacy_records_allowed'])
         for name, spec in p['models'].items():
-            self.assertEqual(spec['validated'], name == 'lj')
+            self.assertEqual(spec['validated'], name in ('lj','lp','cz'))
+            if name in ('lj','lp','cz'):
+                p.require_ready(name)
         observed = p['site_inventory']['standing_posture_observation']['arms_deg']
         self.assertEqual(len(observed), 14)
         self.assertTrue(all(low <= q <= high for q, (low, high) in

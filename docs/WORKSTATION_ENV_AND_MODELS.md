@@ -62,3 +62,18 @@ bash src/deploy_pi05.sh --robot-profile "$ROBOT_PROFILE" --profile-check
 ```
 
 后续初始化、模型检查、查询及执行命令使用同一 `--robot-profile`，按 Readme 顺序运行。
+
+## V53 + lejuclaw 的 lj / lp / cz
+
+同样依据用户指定的联调默认通过，V53 夹爪的 `lj/lp/cz` 已启用，并使用上述目录中的对应绝对权重路径。
+三项配置检查均通过；`kd12` 保持原有未启用状态。选择方式：
+
+```bash
+ROBOT_PROFILE="configs/robots/v53_lejuclaw.json"
+MODEL="lj"  # 也可选择 lp 或 cz
+```
+
+V53 原有双臂姿态、安全参数、标定和夹爪张开 `[10.5,10.5]`、闭合参考 `[95,95]` 均保持。
+模型配置更新改变了配置哈希；完整链路应从重新初始化开始，以生成匹配的新记录。
+这里只修改配置启用状态和权重映射，不表示本轮新增了实机动作或任务成功率验证。
+变更摘要见 [`v53_claw_task_enablement.json`](v53_claw_task_enablement.json)。
