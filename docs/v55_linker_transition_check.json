@@ -1,0 +1,108 @@
+{
+  "date": "2026-10-17",
+  "profile": "configs\\robots\\v55_linker_hand.json",
+  "profile_hash": "33266e3fb0cc26a442e9104d66551f29a157b068f022b74d19f9d4c1cb04d67e",
+  "urdf_sha256": "c76db1a077cda62b0310bd86c9371daf813468cb54c28ddc4a8fdf4c3c43101b",
+  "assumptions": "Base at origin with zero roll/pitch/yaw; waist=0; URDF tool reference. Nominal, all-lower and all-upper arms-down cases are samples, not exhaustive bounds.",
+  "startup_paths": {
+    "vendor_nominal": {
+      "side_peak_speed_deg_s": 21.09375,
+      "side_speed_gate_deg_s": 30,
+      "side_height_error_m": {
+        "l": 5.551115123125783e-17,
+        "r": 5.551115123125783e-17
+      },
+      "fold_peak_speed_deg_s": 14.0625,
+      "fold_wrist_raise_m": {
+        "l": 0.27510000000000007,
+        "r": 0.27510000000000007
+      },
+      "inward_raise_peak_speed_deg_s": 14.0625,
+      "inward_peak_speed_deg_s": 19.685390625,
+      "inward_max_wrist_drop_m": {
+        "l": 0.5012902709089265,
+        "r": 0.49983241641884546
+      },
+      "inward_drop_limit_m": 0.55,
+      "resume_peak_speed_deg_s": 19.685390625,
+      "path_samples_checked": 488
+    },
+    "bounds_lower": {
+      "side_peak_speed_deg_s": 23.90625,
+      "side_speed_gate_deg_s": 30,
+      "side_height_error_m": {
+        "l": 0.0018233058655028334,
+        "r": 0.0018233058655027223
+      },
+      "fold_peak_speed_deg_s": 14.0625,
+      "fold_wrist_raise_m": {
+        "l": 0.2768433945254295,
+        "r": 0.27319678279442394
+      },
+      "inward_raise_peak_speed_deg_s": 14.0625,
+      "inward_peak_speed_deg_s": 19.685390625,
+      "inward_max_wrist_drop_m": {
+        "l": 0.5012103595688532,
+        "r": 0.4997525050787721
+      },
+      "inward_drop_limit_m": 0.55,
+      "resume_peak_speed_deg_s": 19.685390625,
+      "path_samples_checked": 488
+    },
+    "bounds_upper": {
+      "side_peak_speed_deg_s": 23.90625,
+      "side_speed_gate_deg_s": 30,
+      "side_height_error_m": {
+        "l": 0.0018233058655027223,
+        "r": 0.0018233058655028334
+      },
+      "fold_peak_speed_deg_s": 14.0625,
+      "fold_wrist_raise_m": {
+        "l": 0.27319678279442394,
+        "r": 0.2768433945254295
+      },
+      "inward_raise_peak_speed_deg_s": 14.0625,
+      "inward_peak_speed_deg_s": 19.685390625,
+      "inward_max_wrist_drop_m": {
+        "l": 0.5012103595688532,
+        "r": 0.4997525050787721
+      },
+      "inward_drop_limit_m": 0.55,
+      "resume_peak_speed_deg_s": 19.685390625,
+      "path_samples_checked": 488
+    }
+  },
+  "chest_recovery_samples": {
+    "at_target": {
+      "duration_seconds": 4.5,
+      "peak_speed_deg_s": 0.0,
+      "minimum_centerline_clearance_m": 0.22315833282779154,
+      "maximum_fk_displacement_m": {
+        "elbow": 0.0,
+        "wrist": 0.0,
+        "modeled_hand_tip": 0.0
+      }
+    },
+    "near_target": {
+      "duration_seconds": 4.5,
+      "peak_speed_deg_s": 1.875,
+      "minimum_centerline_clearance_m": 0.22025797152615642,
+      "maximum_fk_displacement_m": {
+        "elbow": 0.014819688142813195,
+        "wrist": 0.015087548561151892,
+        "modeled_hand_tip": 0.015482659752469792
+      }
+    }
+  },
+  "hand_default_check": "Open target preserved; full model fraction maps ten flexion channels to 50 and preserves both thumb_aux=100.",
+  "remaining_profile_problems": [
+    "validated=false: this specific hardware profile has not been verified",
+    "network.workstation_ip must be an IPv4 address"
+  ],
+  "limitations": [
+    "No physical hand/obstacle/self collision checking or live tracking verification.",
+    "Copied thresholds and default flexion caps are candidate settings; not physical task success.",
+    "Existing side_raise_plan has its own fixed 30 deg/s speed gate. safety.arm_speed_deg_s=20 gates fold/inward stages; the nominal side path peaks at about 21.094 deg/s."
+  ],
+  "status": "offline checks passed; no motion sent"
+}

@@ -1,0 +1,117 @@
+{
+  "date": "2026-10-16",
+  "method": "Read-only SFTP reads of the user-supplied snapshots; no robot connection or backup modification. File hashes computed over captured bytes.",
+  "sources": {
+    "v53": "/data/kuavo-host-backup-20261016-155214",
+    "v55": "/data/kuavo-v55-dexhand-backup-20261016-jDHJbi/v55-linker-hand",
+    "host": "mingzi@192.168.49.17"
+  },
+  "files": [
+    {
+      "reference_path": "v55/lower/v55-config/kuavo.json",
+      "sha256": "f233e4a714cb2ac31b78da53234d6097f98f7900fc0106c0bb5a0fe057942018",
+      "bytes": 13482
+    },
+    {
+      "reference_path": "v55/lower/linker-hand-mapping.h",
+      "sha256": "1c7d8fa57ad8e0e6d67228830c8c5c7b7ae258f048d6fdc78ab1290fe671c40b",
+      "bytes": 1046
+    },
+    {
+      "reference_path": "v55/lower/touch-hand-controller.h",
+      "sha256": "8bbb0b200bab2cd65c8a5bc2e45e02df051e0f32b0a56f5fa70570a7a10956a4",
+      "bytes": 7660
+    },
+    {
+      "reference_path": "v55/lower/kuavo-msgs/msg/robotHandPosition.msg",
+      "sha256": "13dd4fbb8516e11c104ef794ce0e3da3f36d3bda002660acda428e5d563d451d",
+      "bytes": 68
+    },
+    {
+      "reference_path": "v55/lower/kuavo-msgs/msg/dexhandCommand.msg",
+      "sha256": "627f09a6582418ce0e50d53824e7e25edee1da1a250cabfc948998ec5a1448dd",
+      "bytes": 523
+    },
+    {
+      "reference_path": "v55/lower/shared-driver-sdk/include/dexhand_sdk/dexhand_base.h",
+      "sha256": "0acf23eef7bb3602171614ae2bfe7844d3f50cb79cd13be710277f36c2727491",
+      "bytes": 6786
+    },
+    {
+      "reference_path": "v55/lower/v55-model/urdf/biped_s55.urdf",
+      "sha256": "c76db1a077cda62b0310bd86c9371daf813468cb54c28ddc4a8fdf4c3c43101b",
+      "bytes": 55642
+    },
+    {
+      "reference_path": "v55/lower/active-device-config/offset.csv",
+      "sha256": "e832c1d23f5a348beed968fbf3221c54e00590aff2d65105e40161092c70d991",
+      "bytes": 141
+    },
+    {
+      "reference_path": "v55/lower/active-device-config/arms_zero.yaml",
+      "sha256": "61e5bf3133ec61517425fec571fd1e2a5d64d2e51cd80d68c0279eaabf3bf884",
+      "bytes": 294
+    },
+    {
+      "reference_path": "v55/lower/active-device-config/HandProtocolType.ini",
+      "sha256": "4c3ad3967b9b126f3d42dae309394b23002342f1208c2a6706213eb49ee03872",
+      "bytes": 10
+    },
+    {
+      "reference_path": "v53/lower-vendor/src/kuavo_msgs/msg/lejuClawState.msg",
+      "sha256": "b9de2b927c94861fb9f58a3b89df18b336ad0337e8f52b70555cef39cc2520c6",
+      "bytes": 261
+    },
+    {
+      "reference_path": "v53/lower-vendor/src/kuavo_msgs/srv/controlLejuClaw.srv",
+      "sha256": "d9b74a9d0799dc5bf6ab8fcea38f2c6fc4ed43edf13423dafe693d00f9e12e1d",
+      "bytes": 746
+    },
+    {
+      "reference_path": "v53/lower-vendor/installed/include/hardware_plant/lejuclaw_controller.h",
+      "sha256": "f76b1cd0dacbc89d15f2ac7d4441c7fba682057a95605fa06ac6cdd0988b209e",
+      "bytes": 6537
+    }
+  ],
+  "v55_driver": {
+    "relative_path": "lower/shared-driver-sdk/lib/libros_hardware_plant_cxx.so",
+    "sha256": "c43a40561d0f116be567665a728b42d5f787978d7d575b2cb17add029b4fec24",
+    "evidence": "c43a40561d0f116be567665a728b42d5f787978d7d575b2cb17add029b4fec24  /data/kuavo-v55-dexhand-backup-20261016-jDHJbi/lower/home/lab/kuavo-ros-opensource/installed/lib/libros_hardware_plant_cxx.so\n00000000002cfcc0 T eef_controller::linker_hand::forwardMapThumbFlexion(unsigned short)\n00000000002cfd60 T eef_controller::linker_hand::inverseMapThumbFlexion(unsigned short)\n00000000002cfcf0 T eef_controller::linker_hand::forwardMapThumbAbduction(unsigned short)\n00000000002cfda0 T eef_controller::linker_hand::inverseMapThumbAbduction(unsigned short)\n00000000002cfd40 T eef_controller::linker_hand::forwardMapDualHandsInplace(std::array<std::array<unsigned short, 6ul>, 2ul>&)\n00000000002cfd10 T eef_controller::linker_hand::forwardMapSingleHandInplace(std::array<unsigned short, 6ul>&)\n00000000002bd010 T eef_controller::DexhandController::send_position(std::array<std::array<unsigned short, 6ul>, 2ul> const&)\n00000000002bb800 T eef_controller::DexhandController::set_linker_hand(bool)\n00000000002bcf10 T eef_controller::DexhandController::send_left_position(std::array<unsigned short, 6ul> const&)\n00000000002bcf90 T eef_controller::DexhandController::send_right_position(std::array<unsigned short, 6ul> const&)\nl_thumb\nl_thumb_aux\nl_pinky\nr_thumb\n\ndexhand/command\ndexhand/state\ncontrol_robot_hand_position\n  29f2a0:\tc3                   \tret    \n  29f2a1:\t0f 1f 80 00 00 00 00 \tnopl   0x0(%rax)\n  29f2a8:\t0f b7 f8             \tmovzwl %ax,%edi\n  29f2ab:\te8 a0 f0 f9 ff       \tcall   23e350 <eef_controller::linker_hand::inverseMapThumbFlexion(unsigned short)@plt>\n  29f2b0:\te9 8a fb ff ff       \tjmp    29ee3f <eef_controller::DexhandRosNode::publish_loop()@@Base+0x3af>\n  29f2b5:\t0f 1f 00             \tnopl   (%rax)\n  29f2b8:\t0f b7 f8             \tmovzwl %ax,%edi\n  29f2bb:\te8 90 f0 f9 ff       \tcall   23e350 <eef_controller::linker_hand::inverseMapThumbFlexion(unsigned short)@plt>\n  29f2c0:\te9 43 fc ff ff       \tjmp    29ef08 <eef_controller::DexhandRosNode::publish_loop()@@Base+0x478>\n  29f2c5:\t0f 1f 00             \tnopl   (%rax)\n  29f2c8:\t0f b7 f8             \tmovzwl %ax,%edi\n  29f2cb:\te8 10 89 fa ff       \tcall   247be0 <eef_controller::linker_hand::inverseMapThumbAbduction(unsigned short)@plt>\n  29f2d0:\te9 6a fb ff ff       \tjmp    29ee3f <eef_controller::DexhandRosNode::publish_loop()@@Base+0x3af>\n  29f2d5:\t0f 1f 00             \tnopl   (%rax)\n  29f2d8:\t0f b7 f8             \tmovzwl %ax,%edi\n  29f2db:\te8 00 89 fa ff       \tcall   247be0 <eef_controller::linker_hand::inverseMapThumbAbduction(unsigned short)@plt>\n  29f2e0:\te9 23 fc ff ff       \tjmp    29ef08 <eef_controller::DexhandRosNode::publish_loop()@@Base+0x478>\n  29f2e5:\t0f 1f 00             \tnopl   (%rax)\n  29f2e8:\t4c 8d ad c0 fc ff ff \tlea    -0x340(%rbp),%r13\n  29f2ef:\t48 8b b0 78 01 00 00 \tmov    0x178(%rax),%rsi\n--\n  2bd099:\tc3                   \tret    \n  2bd09a:\t66 0f 1f 44 00 00    \tnopw   0x0(%rax,%rax,1)\n  2bd0a0:\t48 89 e7             \tmov    %rsp,%rdi\n  2bd0a3:\te8 68 dc f6 ff       \tcall   22ad10 <eef_controller::linker_hand::forwardMapDualHandsInplace(std::array<std::array<unsigned short, 6ul>, 2ul>&)@plt>\n  2bd0a8:\teb 99                \tjmp    2bd043 <eef_controller::DexhandController::send_position(std::array<std::array<unsigned short, 6ul>, 2ul> const&)@@Base+0x33>\n  2bd0aa:\te8 91 19 f7 ff       \tcall   22ea40 <__stack_chk_fail@plt>\n  2bd0af:\t90                   \tnop\n\n",
+    "dedicated_copy_sha256_matches": true
+  },
+  "limitations": [
+    "Backup/static verification only; no live ROS or motor commands.",
+    "Exact Linker product SKU and successful grasp limits are not established.",
+    "Claw message/header comments describe 0=closed, but the existing site profile has operator-confirmed open feedback at 10.5; retain measured per-site mapping rather than reversing it based on generic comments."
+  ],
+  "verified_against_backup_source_manifest": [
+    {
+      "source_path": "home/lab/kuavo-ros-opensource/src/kuavo_assets/config/kuavo_v55/kuavo.json",
+      "sha256": "f233e4a714cb2ac31b78da53234d6097f98f7900fc0106c0bb5a0fe057942018"
+    },
+    {
+      "source_path": "home/lab/kuavo-ros-opensource/installed/include/hardware_plant/linker_hand_mapping.h",
+      "sha256": "1c7d8fa57ad8e0e6d67228830c8c5c7b7ae258f048d6fdc78ab1290fe671c40b"
+    },
+    {
+      "source_path": "home/lab/kuavo-ros-opensource/installed/include/hardware_plant/touch_hand_controller.h",
+      "sha256": "8bbb0b200bab2cd65c8a5bc2e45e02df051e0f32b0a56f5fa70570a7a10956a4"
+    },
+    {
+      "source_path": "home/lab/kuavo-ros-opensource/installed/include/humanoid_interface_drake/common/robot_state.h",
+      "sha256": "a71b2aa27c30723e7466f2ab1edd8911c979ede174dbbba5082f2f4888faeed2"
+    },
+    {
+      "source_path": "home/lab/kuavo-ros-opensource/src/humanoid-control/humanoid_interface_ros/src/HumanoidHandCommandNode.cpp",
+      "sha256": "9ef80143109e93c53e4fa719a403a598b4ad63021669803e12fcc1306e6a603c"
+    },
+    {
+      "source_path": "home/lab/kuavo-ros-opensource/src/humanoid-control/humanoid_interface_ros/src/HumanoidArmTargetPosesNode.cpp",
+      "sha256": "7d471b63babf7dea73db2f3060283a9b450395ba4971a830ce088534e95b7fc5"
+    },
+    {
+      "source_path": "root/.config/lejuconfig/HandProtocolType.ini",
+      "sha256": "4c3ad3967b9b126f3d42dae309394b23002342f1208c2a6706213eb49ee03872"
+    }
+  ]
+}

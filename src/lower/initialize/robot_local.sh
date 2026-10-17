@@ -99,7 +99,7 @@ ln -sfn "$task_log" "$task_logs/latest.log"
 task_worker_mode=--worker
 if test "$task_mode" = --resume; then task_worker_mode=--resume-worker; fi
 if test "$task_mode" = --camera-lower; then task_worker_mode=--camera-lower-worker; fi
-tmux send-keys -t "$task_pane" -l "env PI05_GRIP_CURRENT_MA='$task_grip_current' bash '$task_dir/robot_local.sh' --robot-profile '$PI05_ROBOT_PROFILE' $task_worker_mode > '$task_log' 2>&1; task_worker_rc=\$?; printf '%s' \"\$task_worker_rc\" > '$task_status'; exit \"\$task_worker_rc\""
+tmux send-keys -t "$task_pane" -l "env PI05_WORKSTATION_IP='$PI05_WORKSTATION_HOST' PI05_GRIP_CURRENT_MA='$task_grip_current' bash '$task_dir/robot_local.sh' --robot-profile '$PI05_ROBOT_PROFILE' $task_worker_mode > '$task_log' 2>&1; task_worker_rc=\$?; printf '%s' \"\$task_worker_rc\" > '$task_status'; exit \"\$task_worker_rc\""
 tmux send-keys -t "$task_pane" Enter
 printf 'Reset started: tmux=%s log=%s\n' "$task_session" "$task_log"
 # A tmux pane kept by remain-on-exit can leave its child as a zombie. tail

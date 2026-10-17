@@ -12,6 +12,7 @@ import sys
 
 STATE_CONTRACT = 'arm7_rad,eef1_closed_fraction,arm7_rad,eef1_closed_fraction:v1'
 CAMERA_NAMES = ('head_cam_h', 'wrist_cam_l', 'wrist_cam_r')
+EEF_DRIVERS = {'revo1': 'qiangnao', 'leju_claw': 'lejuclaw', 'linker_hand': 'linker_hand'}
 
 
 def default_path():
@@ -33,6 +34,11 @@ class RobotProfile:
     def __init__(self, path):
         self.path = Path(path).resolve()
         self.data = json.loads(self.path.read_text(encoding='utf-8'))
+        # Use a dedicated input variable: PI05_WORKSTATION_HOST is an output of
+        # --shell and can otherwise remain stale when switching profiles.
+        self.workstation_override = os.environ.get('PI05_WORKSTATION_IP')
+        if self.workstation_override is not None:
+            self.data['network']['workstation_ip'] = self.workstation_override
         self.digest = hashlib.sha256(json.dumps(self.data, sort_keys=True,
                                                separators=(',', ':')).encode()).hexdigest()
         if self.data.get('schema_version') != 1:
@@ -41,8 +47,8 @@ class RobotProfile:
             raise ValueError('robot_id must contain only letters, numbers, _ and -')
         if self.data.get('robot_version') not in (53, 55):
             raise ValueError('Expected robot_version 53 or 55')
-        if self.data.get('eef_type') not in ('revo1', 'leju_claw'):
-            raise ValueError('Expected eef_type revo1 or leju_claw')
+        if self.data.get('eef_type') not in EEF_DRIVERS:
+            raise ValueError('Expected eef_type revo1, leju_claw or linker_hand')
         if self.data.get('legacy_records_allowed') and self.data['robot_version'] != 53:
             raise ValueError('V55 must not accept legacy V53 records')
 
@@ -56,7 +62,9 @@ class RobotProfile:
 
     @property
     def hand_size(self):
-        return 12 if self['eef_type'] == 'revo1' else 2
+        # Linker uses the vendor's BrainCo-compatible six-channel ROS interface,
+        # not the manufacturer's raw /cb_* topics or a different-DOF SDK.
+        return 2 if self['eef_type'] == 'leju_claw' else 12
 
     @property
     def controlled_indices(self):
@@ -142,17 +150,25 @@ class RobotProfile:
         if eef.get('current_setup') not in ('vendor', 'revo1_advanced_can'):
             errors.append('Verify end_effector.current_setup')
         if eef.get('current_setup') == 'revo1_advanced_can' and (
-                self['robot_version'] != 53 or self.hand_size != 12):
+                self['robot_version'] != 53 or self['eef_type'] != 'revo1'):
             errors.append('The current CAN setup tool is audited only for the existing V53 Revo1 Advanced')
         initial = eef.get('initial')
         if not vector(initial, self.hand_size) or any(not 0 <= x <= 100 for x in (initial or [])):
             errors.append('Fill end_effector.initial (%d values in 0..100)' % self.hand_size)
-        expected_driver = 'qiangnao' if self.hand_size == 12 else 'lejuclaw'
+        expected_driver = EEF_DRIVERS[self['eef_type']]
         if eef.get('driver_type') != expected_driver:
             errors.append('EndEffectorType must match ' + expected_driver)
+        if self['eef_type'] == 'linker_hand':
+            if eef.get('interface') != 'kuavo_dexhand_6dof':
+                errors.append('Linker Hand requires the vendor kuavo_dexhand_6dof interface')
+            if (eef.get('state_topic') != '/dexhand/state' or
+                    eef.get('command_topic') != '/control_robot_hand_position'):
+                errors.append('Linker Hand must use the vendor 0..100 dexhand topics, not raw SDK topics')
+            if not sha256(eef.get('driver_library_sha256')):
+                errors.append('Fill Linker Hand end_effector.driver_library_sha256 from the verified vendor bridge')
         if self.hand_size == 12:
             if not isinstance(initial, list) or any(type(x) is not int for x in initial):
-                errors.append('Revo1 initial positions must be 12 integer command units')
+                errors.append('Dexterous-hand initial positions must be 12 integer command units')
             if not vector(eef.get('finger_caps'), 10) or any(not 0 <= x <= 100 for x in (eef.get('finger_caps') or [])):
                 errors.append('Fill verified end_effector.finger_caps (10 values)')
         else:
@@ -210,7 +226,8 @@ _active = None
 def active_profile():
     global _active
     path = selected_path()
-    if _active is None or _active.path != path:
+    if (_active is None or _active.path != path or
+            _active.workstation_override != os.environ.get('PI05_WORKSTATION_IP')):
         _active = RobotProfile(path)
     return _active
 
@@ -240,6 +257,8 @@ def main():
     parser.add_argument('--model')
     parser.add_argument('--describe', action='store_true')
     parser.add_argument('--model-shell', action='store_true')
+    parser.add_argument('--resolved-json', action='store_true',
+                        help='Print the checked profile with environment overrides materialized')
     parser.add_argument('--project-root', type=Path)
     args = parser.parse_args()
     p = RobotProfile(args.robot_profile)
@@ -247,7 +266,11 @@ def main():
         print(json.dumps(dict(**p.identity, problems=p.problems(args.model)), indent=2))
         return
     p.require_ready(args.model)
-    if args.model_shell:
+    if args.resolved_json:
+        # The transfer file must remain valid UTF-8 even when the caller's
+        # stdout locale is not UTF-8; ASCII JSON escapes preserve all text.
+        print(json.dumps(p.data, ensure_ascii=True, indent=2))
+    elif args.model_shell:
         if not args.model or args.project_root is None:
             raise ValueError('--model-shell requires --model and --project-root')
         spec = p['models'][args.model]

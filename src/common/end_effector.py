@@ -1,4 +1,9 @@
-"""Revo1 and Leju claw adapters. ROS imports are deferred for offline tests."""
+"""Kuavo Revo1, Leju claw and Linker Hand adapters; deferred ROS imports.
+
+Linker uses the vendor's six-channel 0..100 BrainCo-compatible ROS interface.
+Thumb mapping and its inverse belong to the vendor driver; never apply them
+again here or publish raw Linker SDK values on these topics.
+"""
 import math
 import threading
 import time
@@ -6,13 +11,14 @@ from urllib.parse import urlparse
 
 from robot_profile import active_profile
 
-REVO_NAMES = tuple('%s_%s' % (s, f) for s in ('l', 'r')
-                   for f in ('thumb', 'thumb_aux', 'index', 'middle', 'ring', 'pinky'))
+DEXHAND_NAMES = tuple('%s_%s' % (s, f) for s in ('l', 'r')
+                      for f in ('thumb', 'thumb_aux', 'index', 'middle', 'ring', 'pinky'))
+REVO_NAMES = DEXHAND_NAMES  # Compatibility for callers of the original adapter.
 CLAW_NAMES = ('left_claw', 'right_claw')
 
 
 def native_names(profile):
-    return REVO_NAMES if profile.hand_size == 12 else CLAW_NAMES
+    return DEXHAND_NAMES if profile.hand_size == 12 else CLAW_NAMES
 
 
 def validate_native(values, profile):
@@ -106,6 +112,8 @@ class EndEffector:
         self.publisher = None
         self.service = None
         self.inflight = None
+        self.claw_metadata = None
+        self.bootstrap_attempted = False
         eef = self.profile['end_effector']
         self.queue = ClawCommandQueue(eef['command_timeout_s'], eef['min_command_interval_s'],
                                      eef['position_deadband'])
@@ -122,12 +130,16 @@ class EndEffector:
                 values, states = ordered_feedback(msg.name, msg.position, self.profile), None
             else:
                 values = ordered_feedback(msg.data.name, msg.data.position, self.profile)
-                states = tuple(msg.state)
-                if len(states) != 2:
+                if len(msg.state) != 2:
                     raise RuntimeError('Expected left and right claw states')
+                table = dict(zip(msg.data.name, msg.state))
+                states = tuple(table[name] for name in CLAW_NAMES)
             stamp = time.monotonic()
             with self.lock:
                 self.sample = (stamp, values, states)
+                if self.profile.hand_size == 2:
+                    self.claw_metadata = (stamp, msg._connection_header.get('callerid', ''),
+                        list(msg.data.velocity), list(msg.data.effort), msg.is_high_freq)
             if self.on_feedback:
                 self.on_feedback(values, stamp)
         except (RuntimeError, ValueError) as exc:
@@ -137,14 +149,20 @@ class EndEffector:
         with self.lock:
             return self.sample is not None
 
-    def read(self, max_age=.5):
+    def _snapshot(self, max_age=.5, initial_unknown=False, with_metadata=False):
         with self.lock:
             sample = self.sample
-        if sample is None or time.monotonic()-sample[0] >= max_age:
+            metadata = getattr(self, 'claw_metadata', None) if with_metadata else None
+        if sample is None or not -.01 <= time.monotonic()-sample[0] < max_age:
             raise RuntimeError('End-effector feedback is missing or stale')
-        if sample[2] is not None and any(s not in (1, 2, 3) for s in sample[2]):
+        allowed = (0, 1, 2, 3) if initial_unknown else (1, 2, 3)
+        if sample[2] is not None and any(s not in allowed for s in sample[2]):
             raise RuntimeError('Claw error/unknown state: ' + str(sample[2]))
-        return list(sample[1])
+        value = (sample[0], list(sample[1]), sample[2])
+        return value+(metadata,) if with_metadata else value
+
+    def read(self, max_age=.5):
+        return self._snapshot(max_age)[1]
 
     def states(self):
         self.read()
@@ -178,7 +196,7 @@ class EndEffector:
         if self.profile.hand_size == 12:
             from kuavo_msgs.msg import robotHandPosition
             if self.publisher is None:
-                raise RuntimeError('Revo1 command connection is not initialized')
+                raise RuntimeError('Dexterous-hand command connection is not initialized')
             msg = robotHandPosition()
             msg.header.stamp = self.rospy.Time.now()
             msg.left_hand_position = [round(x) for x in values[:6]]
@@ -209,6 +227,12 @@ class EndEffector:
         goal = self.queue.due(states, now)
         if goal is None:
             return
+        self._send_claw_once(goal, now)
+
+    def _send_claw_once(self, goal, now):
+        if self.service is None or self.inflight is not None:
+            raise RuntimeError('Claw service unavailable or a request is still in flight')
+        goal = validate_native(goal, self.profile)
         from kuavo_msgs.srv import controlLejuClawRequest
         request = controlLejuClawRequest()
         request.data.name = list(CLAW_NAMES)
@@ -251,14 +275,18 @@ class EndEffector:
             if time.monotonic() >= deadline:
                 raise RuntimeError('No end-effector feedback')
             time.sleep(.05)
-        start = self.read()
         target = self.profile['end_effector']['initial']
+        if self.profile.hand_size == 2:
+            _, _, states = self._snapshot(initial_unknown=True)
+            if 0 in states:
+                return self._bootstrap_open(check_robot, target)
+        start = self.read()
         if self.profile.hand_size == 2 and self.states() == (2,2) and max(
                 abs(a-b) for a,b in zip(start,target)) <= 3:
             return dict(start=start,target=list(target),actual=start,already_at_target=True)
         self.connect_commands()
         if self.profile.hand_size == 12:
-            raise RuntimeError('Use the guarded Revo1 ramp initializer')
+            raise RuntimeError('Use the guarded dexterous-hand ramp initializer')
         self.command(target)
         deadline = time.monotonic()+self.profile['end_effector']['command_timeout_s']
         while True:
@@ -269,6 +297,67 @@ class EndEffector:
                 return dict(start=start, target=list(target), actual=actual, already_at_target=False)
             if time.monotonic() >= deadline:
                 raise RuntimeError('Claw initialization did not reach its empty-gripper target')
+            time.sleep(.05)
+
+    def _bootstrap_open(self, check_robot, target):
+        """One initial OPEN through the existing controller, never normal Unknown acceptance.
+
+        The vendor controller starts its command-result state at Unknown even
+        after CAN calibration and numeric feedback are available. Require the
+        actual source, finite fresh telemetry, a stationary empty-claw opening
+        target, and then REAL post-command Reached feedback. Never resend.
+        """
+        if (self.profile.hand_size != 2 or
+                list(target) != self.profile['end_effector']['open_position'] or
+                self.bootstrap_attempted or self.queue.last is not None or self.inflight is not None):
+            raise RuntimeError('Unknown-state bootstrap is restricted to one initial dual-claw OPEN')
+        start_time, start, states = self._snapshot(initial_unknown=True)
+        if states != (0, 0):
+            raise RuntimeError('Bootstrap requires both claws in the initial Unknown state')
+        check_robot()
+        self.connect_commands()
+        if not self.connections_ready([]):
+            raise RuntimeError('Claw service is not on the configured lower controller')
+        deadline, anchor = time.monotonic()+2, None
+        while True:
+            check_robot()
+            stamp, actual, states, metadata = self._snapshot(initial_unknown=True, with_metadata=True)
+            if (metadata is None or metadata[0] != stamp or metadata[1] != '/nodelet_manager' or
+                    metadata[4] or len(metadata[2]) != 2 or len(metadata[3]) != 2 or
+                    not all(math.isfinite(float(v)) for v in metadata[2]+metadata[3]) or
+                    states != (0, 0)):
+                raise RuntimeError('Initial claw feedback is not valid stationary controller telemetry')
+            now = time.monotonic()
+            if anchor is None or max(abs(a-b) for a,b in zip(actual, anchor[1])) > 1:
+                anchor = (stamp, actual)
+            if stamp > start_time and stamp-anchor[0] >= .3:
+                break
+            if now >= deadline:
+                raise RuntimeError('Initial claw feedback did not refresh and settle; no command sent')
+            time.sleep(.05)
+        check_robot()
+        self.bootstrap_attempted = True
+        sent = time.monotonic()
+        self._send_claw_once(target, sent)
+        deadline = sent+self.profile['end_effector']['command_timeout_s']
+        known_seen = False
+        while True:
+            check_robot()
+            stamp, actual, states = self._snapshot(initial_unknown=True)
+            now = time.monotonic()
+            ack = self.finish_service(now)
+            if 0 in states:
+                if known_seen or now-sent >= min(1., self.queue.timeout):
+                    raise RuntimeError('Claw did not leave initial Unknown after OPEN; not resent')
+            else:
+                known_seen = True
+            if ack and self.inflight is None and stamp > sent and states == (2, 2) and max(
+                    abs(a-b) for a,b in zip(actual, target)) <= 3:
+                return dict(start=start, target=list(target), actual=actual,
+                            already_at_target=False, bootstrap_from_unknown=True,
+                            states=list(states), command_sent_once=True)
+            if now >= deadline:
+                raise RuntimeError('Initial claw OPEN lacked real Reached feedback; not resent')
             time.sleep(.05)
 
     def close(self):

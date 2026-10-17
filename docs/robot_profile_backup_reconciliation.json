@@ -1,0 +1,519 @@
+{
+  "checked_on": "2026-10-17",
+  "backup_host": "mingzi@192.168.43.19",
+  "method": "Read-only SFTP of user-supplied backup files; local extraction and cross-checks. No robot connections, motion or remote file changes.",
+  "v53_lejuclaw": {
+    "profile_sha256_unchanged": "816cc2e6ed0c9e84939a0f667ef3c271eb8a3e995ed015573d2197ce2524307c",
+    "backup_sections_equal": [
+      "network",
+      "paths",
+      "calibration",
+      "joints",
+      "poses",
+      "tool",
+      "safety",
+      "cameras.serials"
+    ],
+    "retained_newer_open_position": [
+      10.5,
+      10.5
+    ],
+    "older_backup_open_position": [
+      0,
+      0
+    ],
+    "retained_newer_closed_reference": [
+      95,
+      95
+    ],
+    "note": "Backup initial/open/closed values are older than the site-confirmed local profile. Existing profile and lj validation are preserved byte-for-byte."
+  },
+  "v55_linker_hand": {
+    "restored_fields": [
+      "network.lower_host",
+      "network.upper_host",
+      "network.lower_ip",
+      "network.upper_ip",
+      "cameras.serials.left",
+      "cameras.serials.right",
+      "cameras.serials.head",
+      "tool.left_xyz",
+      "tool.left_rpy",
+      "tool.right_xyz",
+      "tool.right_rpy"
+    ],
+    "verified_existing_fields": [
+      "robot_version",
+      "eef_type",
+      "paths.urdf_sha256",
+      "calibration",
+      "joints.sensor_count",
+      "joints.arm_indices",
+      "joints.waist_index"
+    ],
+    "remaining_readiness_problems": [
+      "validated=false: this specific hardware profile has not been verified",
+      "network.workstation_ip must be an IPv4 address",
+      "Fill poses.side (14 verified degree values)",
+      "Fill poses.folded (14 verified degree values)",
+      "Fill poses.chest_high (14 verified degree values)",
+      "Fill poses.arms_down_bounds_deg (14 verified [min,max] pairs)",
+      "Fill end_effector.initial (12 values in 0..100)",
+      "Dexterous-hand initial positions must be 12 integer command units",
+      "Fill verified end_effector.finger_caps (10 values)",
+      "Fill safety.pose_tolerance_deg (14 positive degree tolerances)",
+      "safety.startup_wrist_drop_limit_m must be positive"
+    ],
+    "configuration_pending": [
+      {
+        "fields": [
+          "network.workstation_ip"
+        ],
+        "reason": "Workstation robot-facing address is outside the lower/upper backup; choose it for the actual workstation."
+      },
+      {
+        "fields": [
+          "poses.arms_down_bounds_deg",
+          "poses.side",
+          "poses.folded",
+          "poses.chest_high",
+          "safety.pose_tolerance_deg",
+          "safety.startup_wrist_drop_limit_m"
+        ],
+        "reason": "The copied initialization profile is V53/Revo1. V55 vendor poses above are available, but do not define this project initialization/recovery path or acceptance thresholds."
+      },
+      {
+        "fields": [
+          "end_effector.initial",
+          "end_effector.finger_caps"
+        ],
+        "reason": "No V55/Linker project initial pose or ten-channel grasp caps were established by the backed-up initialization package; select and validate these for Linker. Generic SDK demonstration vectors are not calibrated task limits."
+      },
+      {
+        "fields": [
+          "cameras.rotations",
+          "cameras.head_driver_rotation",
+          "tool"
+        ],
+        "reason": "Numeric camera rotation defaults and URDF-frame tool transform are recorded, but image orientation against training data and physical hand extent still need confirmation."
+      },
+      {
+        "fields": [
+          "models.*.checkpoint",
+          "models.*.validated"
+        ],
+        "reason": "User confirms workstation deployment code and PI05 weights are excluded. Select checkpoint, norm statistics and matching task semantics from the workstation."
+      },
+      {
+        "fields": [
+          "validated"
+        ],
+        "reason": "Backup reconciliation does not establish live hardware/file equality, tracking, clearance or task success."
+      }
+    ],
+    "old_initialization_identity": {
+      "robot_id": "v53_qi",
+      "robot_version": 53,
+      "eef_type": "revo1"
+    },
+    "stale_upper_version": 53
+  },
+  "other_combinations": "V55/Revo1 and V55/lejuclaw have no corresponding actual-machine backup in this request; keep them as unvalidated templates.",
+  "captured_files": [
+    {
+      "robot": "v53",
+      "path": "README.md",
+      "bytes": 3550,
+      "sha256": "392b978f7856b11bec9b168263b22d16eb8c15f3c2e6fab307bb95a5dd74d267"
+    },
+    {
+      "robot": "v53",
+      "path": "backup-summary.json",
+      "bytes": 666,
+      "sha256": "f1858b8652807d316912156af5ba47933e0ef8ff627c3e63a28e3978697d3fff"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/.bashrc",
+      "bytes": 4678,
+      "sha256": "a3a7b501780fe17685d24c58ae0076965252126eb266cfa401d749444c53f106"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/.profile",
+      "bytes": 921,
+      "sha256": "2b3f69ad7d48d47a4b8a34d8f7fc5d7205cf02e68b48d3fb1a402f8ea1467b50"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/etc/hosts",
+      "bytes": 244,
+      "sha256": "fe5da50379bc804f715ca631fef4e9128fd8c09071ef7666e25042fd1540ccde"
+    },
+    {
+      "robot": "v53",
+      "path": "upper/home/leju_kuavo/.bashrc",
+      "bytes": 5435,
+      "sha256": "8e033b80e317dccaeaf927e58392add35ff4549535ba9d889602b0e255129ef1"
+    },
+    {
+      "robot": "v53",
+      "path": "upper/home/leju_kuavo/.profile",
+      "bytes": 807,
+      "sha256": "28b4a453b68dde64f814e94bab14ee651f4f162e15dd9920490aa1d49f05d2a4"
+    },
+    {
+      "robot": "v53",
+      "path": "upper/etc/hosts",
+      "bytes": 272,
+      "sha256": "e22083b84d047c4c238973d30897ee6da73bdfb0d9b83240f013d0020e3d70d4"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/common/robot_profile.json",
+      "bytes": 11522,
+      "sha256": "00917984d621c7164b1dfc23036fb481b76a843bac4865635e3bfeafd8d46ddd"
+    },
+    {
+      "robot": "v55",
+      "path": "README.md",
+      "bytes": 1388,
+      "sha256": "ec5f7d0f166fd339207d501221bddddbeb90b63a9e5feab2494769ae9ee2d8cb"
+    },
+    {
+      "robot": "v55",
+      "path": "backup-summary.json",
+      "bytes": 664,
+      "sha256": "42b1f73324161f8d2e2830e6613878e644d99f6528e1d47d9e9b6cb94ae83c1f"
+    },
+    {
+      "robot": "v55",
+      "path": "audit/lower-inventory.txt",
+      "bytes": 2350,
+      "sha256": "179aa0e83cf098e78fca8ac49929a7930579c863a0edf642a1af70950a0b3f23"
+    },
+    {
+      "robot": "v55",
+      "path": "audit/upper-inventory.txt",
+      "bytes": 3270,
+      "sha256": "68f63209556bf2d2c5a17b8a19cfe5f3005a9bba8e254514f30e2c75c53f6b0d"
+    },
+    {
+      "robot": "v55",
+      "path": "lower/home/lab/.bashrc",
+      "bytes": 4709,
+      "sha256": "0384623f962bf272ed12761b1e70f847de98af4bf520b57ef053b31730b945b0"
+    },
+    {
+      "robot": "v55",
+      "path": "lower/home/lab/.profile",
+      "bytes": 921,
+      "sha256": "2b3f69ad7d48d47a4b8a34d8f7fc5d7205cf02e68b48d3fb1a402f8ea1467b50"
+    },
+    {
+      "robot": "v55",
+      "path": "lower/etc/hosts",
+      "bytes": 244,
+      "sha256": "fe5da50379bc804f715ca631fef4e9128fd8c09071ef7666e25042fd1540ccde"
+    },
+    {
+      "robot": "v55",
+      "path": "upper/home/leju_kuavo/.bashrc",
+      "bytes": 5436,
+      "sha256": "0f1c1dd867478baae63a2512f874a45048e8517c7f26cf607bc8baf6440dd55c"
+    },
+    {
+      "robot": "v55",
+      "path": "upper/home/leju_kuavo/.profile",
+      "bytes": 807,
+      "sha256": "28b4a453b68dde64f814e94bab14ee651f4f162e15dd9920490aa1d49f05d2a4"
+    },
+    {
+      "robot": "v55",
+      "path": "upper/etc/hosts",
+      "bytes": 249,
+      "sha256": "7b41abc1ecc50b73208c9f1d0fb172a6cde67f97ea131f5b5917335e61cb3031"
+    },
+    {
+      "robot": "v55",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/common/robot_profile.json",
+      "bytes": 4566,
+      "sha256": "27ae806c7b1ce92b8ca8026832653840e2792518cf3bf877b49150028e3c69fb"
+    },
+    {
+      "robot": "v55",
+      "path": "v55-linker-hand/upper/camera-settings.conf",
+      "bytes": 187,
+      "sha256": "b6ef8c16ee32d718d7fe59e2e838c8e00c289b511400a5018a7b5999dad05596"
+    },
+    {
+      "robot": "v55",
+      "path": "v55-linker-hand/upper/start-camera.service",
+      "bytes": 311,
+      "sha256": "665a6c49cd5b5b850f5cf8d1a9bcab1af2866258f18eed50d72c02264fafa97d"
+    },
+    {
+      "robot": "v53",
+      "path": "upper/etc/kuavo.conf",
+      "bytes": 186,
+      "sha256": "50575baa605c18efb8cb152f7d9d23292c790f9cf506cd453203f15580bc4c72"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/arm_checkpoint.json",
+      "bytes": 359,
+      "sha256": "c088d04f246af3e6831645076c883ed5da178dab80c7047090462ab52a54c9ea"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/run-1792135681873236574.log",
+      "bytes": 1369,
+      "sha256": "e052a87713a6635db7c5de09b2bd8a1a92412cb3e6c05842c8d03364d5835cce"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/preparation.json",
+      "bytes": 720,
+      "sha256": "3c82bc5b419b6c219b33842ac7c9f4ebc42c49e59934bb60ffd2545758c65cc1"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/controller.log",
+      "bytes": 215077,
+      "sha256": "559278ecee2518f7edbfdc47ac23387033e465fbc509d054573d28474035ecb7"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/result.json",
+      "bytes": 703042,
+      "sha256": "2aff93294894dc0007084be6cb7eab80c2b3e1c32cae728158071ec00e0ac986"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/result-1792135195209281965.json",
+      "bytes": 1308,
+      "sha256": "bbc4d2cf9135aa569280d4830d36b45380322d1cd8fc77eb1ffb5bcfc4b4d11e"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/high_inward_plan.json",
+      "bytes": 82279,
+      "sha256": "2bcbdce775ec27d759b8303d7f38896da98723ade782a940a1cfc43816655cd8"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/side_plan.json",
+      "bytes": 34813,
+      "sha256": "73b4a3eb87c377a314118d1e4c1da8db3a05016674025cad17bb2f0cf7c20546"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/latest.log",
+      "bytes": 3326,
+      "sha256": "51bed2049e917fb6147366c17e7553deaf1ff228ba1d54b16ddfb4042a5fa65d"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/run-1792136247328008601.log",
+      "bytes": 3326,
+      "sha256": "51bed2049e917fb6147366c17e7553deaf1ff228ba1d54b16ddfb4042a5fa65d"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/manual_lowering_confirmed.json",
+      "bytes": 685,
+      "sha256": "943ded68315b9d3cbd214559fd9511279a00208de4d8318f1531058e74964635"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/result-1792136249624160916.json",
+      "bytes": 703042,
+      "sha256": "2aff93294894dc0007084be6cb7eab80c2b3e1c32cae728158071ec00e0ac986"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/claw-link-test-1792137414542897648.json",
+      "bytes": 908,
+      "sha256": "c17c7e289e5ae6370728beb884c4cc47eaf8f155b24ce2e7814434ddee29db9f"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/run-1792135194701598971.log",
+      "bytes": 1503,
+      "sha256": "f3ccfafa86be225d717a4c6abe7a88fce903f912acbb94e78e8a82d6f1ded1f1"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/stand_attempt.json",
+      "bytes": 110,
+      "sha256": "b5c6080b21586d425e1ebc2e6e0c8654381cfebc33b401b4b26605cdf1aa4573"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/profile-transition-9f425c8c1651-ad11a967f28f/current-profile.json",
+      "bytes": 11522,
+      "sha256": "00917984d621c7164b1dfc23036fb481b76a843bac4865635e3bfeafd8d46ddd"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/profile-transition-9f425c8c1651-ad11a967f28f/previous-profile.json",
+      "bytes": 10554,
+      "sha256": "33cf650fb037470e149033c8640f7190fd117299cb1beed8b7140d00a34ceaf4"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/profile-transition-9f425c8c1651-ad11a967f28f/stand-attempt-snapshot.json",
+      "bytes": 110,
+      "sha256": "b5c6080b21586d425e1ebc2e6e0c8654381cfebc33b401b4b26605cdf1aa4573"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/profile-transition-9f425c8c1651-ad11a967f28f/receipt.json",
+      "bytes": 1871,
+      "sha256": "8cbf60fe1ea08e1a65d7bdc27ae99cc140589de168f88812c26683ada65095c0"
+    },
+    {
+      "robot": "v53",
+      "path": "lower/home/lab/kuavo_pi05_lower/initialize/logs/7b9dec8f-9ecd-4f21-a639-96fe89f2aa42/profile-transition-9f425c8c1651-ad11a967f28f/previous-result.json",
+      "bytes": 1308,
+      "sha256": "bbc4d2cf9135aa569280d4830d36b45380322d1cd8fc77eb1ffb5bcfc4b4d11e"
+    },
+    {
+      "robot": "v55",
+      "path": "upper/etc/kuavo.conf",
+      "bytes": 187,
+      "sha256": "b6ef8c16ee32d718d7fe59e2e838c8e00c289b511400a5018a7b5999dad05596"
+    },
+    {
+      "robot": "v55",
+      "path": "v55-linker-hand/lower/active-device-config/action_files/stance.tact",
+      "bytes": 2018,
+      "sha256": "62569b05a890e41059396effb0eae2866fef9e06c9b59d2651df9bd96e97e17b"
+    },
+    {
+      "robot": "v55",
+      "path": "v55-linker-hand/upper/orbbec-driver-source/launch/gemini_330_series.launch",
+      "bytes": 15948,
+      "sha256": "a884914b14732e0ccf0a1bce1a4e19212951c389c66981df433114b603a1a99b"
+    },
+    {
+      "robot": "v55",
+      "path": "v55-linker-hand/lower/arm-and-hand-control/src/HumanoidHandCommandNode.cpp",
+      "bytes": 7395,
+      "sha256": "9ef80143109e93c53e4fa719a403a598b4ad63021669803e12fcc1306e6a603c"
+    }
+  ],
+  "additional_cached_sources": [
+    {
+      "path": "v55/lower/v55-config/kuavo.json",
+      "sha256": "f233e4a714cb2ac31b78da53234d6097f98f7900fc0106c0bb5a0fe057942018"
+    },
+    {
+      "path": "v55/lower/v55-model/urdf/biped_s55.urdf",
+      "sha256": "c76db1a077cda62b0310bd86c9371daf813468cb54c28ddc4a8fdf4c3c43101b"
+    },
+    {
+      "path": "v55/lower/active-device-config/offset.csv",
+      "sha256": "e832c1d23f5a348beed968fbf3221c54e00590aff2d65105e40161092c70d991"
+    },
+    {
+      "path": "v55/lower/active-device-config/arms_zero.yaml",
+      "sha256": "61e5bf3133ec61517425fec571fd1e2a5d64d2e51cd80d68c0279eaabf3bf884"
+    },
+    {
+      "path": "v55/lower/linker-hand-mapping.h",
+      "sha256": "1c7d8fa57ad8e0e6d67228830c8c5c7b7ae258f048d6fdc78ab1290fe671c40b"
+    },
+    {
+      "path": "v55/lower/shared-driver-sdk/include/dexhand_sdk/dexhand_base.h",
+      "sha256": "0acf23eef7bb3602171614ae2bfe7844d3f50cb79cd13be710277f36c2727491"
+    }
+  ],
+  "verification": {
+    "common_suite": {
+      "discovered": 48,
+      "passed": 46,
+      "skipped": 2,
+      "reason": "Linux-only tests skipped on Windows"
+    },
+    "v53_lj_profile_check": "passed",
+    "v55_not_ready_gate": "retained",
+    "source_checks": "Camera serials match bashrc and camera-settings.conf; network matches hosts/backup records; joint layout matches URDF/vendor config; URDF and calibration SHA256 match; V53 file unchanged."
+  },
+  "bag_target_followup": {
+    "date": "2026-10-17",
+    "filled_fields": [
+      "poses.chest_high",
+      "end_effector.initial"
+    ],
+    "bag_sha256": "f9279a28bd017988753535c707f53b9ff7da5de6a3389d682e1beba15caf2714",
+    "report": "go_bag_initial/targets.json",
+    "remaining_profile_problems": [
+      "validated=false: this specific hardware profile has not been verified",
+      "network.workstation_ip must be an IPv4 address",
+      "Fill poses.side (14 verified degree values)",
+      "Fill poses.folded (14 verified degree values)",
+      "Fill poses.arms_down_bounds_deg (14 verified [min,max] pairs)",
+      "Fill verified end_effector.finger_caps (10 values)",
+      "Fill safety.pose_tolerance_deg (14 positive degree tolerances)",
+      "safety.startup_wrist_drop_limit_m must be positive"
+    ],
+    "model_lj_problems": [
+      "validated=false: this specific hardware profile has not been verified",
+      "network.workstation_ip must be an IPv4 address",
+      "Fill poses.side (14 verified degree values)",
+      "Fill poses.folded (14 verified degree values)",
+      "Fill poses.arms_down_bounds_deg (14 verified [min,max] pairs)",
+      "Fill verified end_effector.finger_caps (10 values)",
+      "Fill safety.pose_tolerance_deg (14 positive degree tolerances)",
+      "safety.startup_wrist_drop_limit_m must be positive",
+      "Select a verified matching checkpoint/norm_stats: models.lj"
+    ],
+    "workstation_status": "User confirms inference service and upper image chain work; robot full-chain execution remains unverified."
+  },
+  "transition_defaults_followup": {
+    "date": "2026-10-17",
+    "user_authorized_reference": "configs/robots/v53_revo1.json",
+    "v55_adjustment": "Both elbow arms-down upper bounds clipped from +1 to 0 degrees to match V55 URDF.",
+    "finger_caps": [
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50
+    ],
+    "default_scope": "Position-command flexion limit, not grip-force percentage or measured grasp success.",
+    "offline_report": "v55_linker_transition_check.json",
+    "remaining_profile_problems": [
+      "validated=false: this specific hardware profile has not been verified",
+      "network.workstation_ip must be an IPv4 address"
+    ],
+    "model_lj_problems": [
+      "validated=false: this specific hardware profile has not been verified",
+      "network.workstation_ip must be an IPv4 address",
+      "Select a verified matching checkpoint/norm_stats: models.lj"
+    ],
+    "tests": {
+      "discovered": 54,
+      "passed": 52,
+      "skipped": 2,
+      "skip_reason": "Linux-only cases on Windows"
+    },
+    "robot_motion_sent": false
+  },
+  "environment_and_model_followup": {
+    "date": "2026-10-17",
+    "environment_variable": "PI05_WORKSTATION_IP",
+    "example_effective_profile_hash": "9265e12e256a746f320c86e45a5524e1a179a857b6030df4a5fdcff1606231c7",
+    "example_ip": "192.168.26.108 (test only; use the real workstation address)",
+    "model_mapping_audit": "pi05_model_mapping_audit.json",
+    "commissioning_basis": "user_assumed_pass",
+    "remaining_problems_with_example_ip": [],
+    "agent_motion_sent": false
+  }
+}

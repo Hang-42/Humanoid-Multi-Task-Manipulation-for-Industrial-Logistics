@@ -48,11 +48,29 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(target, [60,99,60,75,75,75,100,99,100,100,100,100])
         self.assertEqual(model_scalars([25,99,0,0,0,0,75,99,0,0,0,0],p), [.25,.75])
 
-    def test_both_v55_templates_fail_closed(self):
+    def test_all_v55_templates_fail_closed(self):
         for name in ('v55_revo1','v55_lejuclaw'):
             p = RobotProfile(ROOT/'configs/robots'/ (name+'.json'))
             with self.subTest(name=name), self.assertRaisesRegex(ValueError,'ROBOT_PROFILE_NOT_READY'):
                 p.require_ready('kd12')
+
+    def test_site_v53_claw_uses_legacy_arm_poses_and_open_initial_target(self):
+        p = RobotProfile(ROOT/'configs/robots/v53_lejuclaw.json')
+        p.require_ready()
+        self.assertEqual(p['poses'], self.base['poses'])
+        self.assertEqual(p['end_effector']['initial'], [10.5, 10.5])
+        self.assertEqual(p['end_effector']['initial'], p['end_effector']['open_position'])
+        self.assertEqual(native_targets([0, 0], [100, 100], p), [10.5, 10.5])
+        self.assertEqual(native_targets([1, 1], [10.5, 10.5], p), [95, 95])
+        self.assertEqual(p['end_effector']['driver_type'], 'lejuclaw')
+        self.assertEqual(p['end_effector']['current_setup'], 'vendor')
+        self.assertFalse(p['legacy_records_allowed'])
+        for name, spec in p['models'].items():
+            self.assertEqual(spec['validated'], name == 'lj')
+        observed = p['site_inventory']['standing_posture_observation']['arms_deg']
+        self.assertEqual(len(observed), 14)
+        self.assertTrue(all(low <= q <= high for q, (low, high) in
+                            zip(observed, p['poses']['arms_down_bounds_deg'])))
 
     def test_existing_can_current_setup_cannot_be_applied_to_v55(self):
         data = copy.deepcopy(self.base)
@@ -258,10 +276,16 @@ print('SYNTHETIC_V55_RUNTIME_IMPORT_OK')
             tool.chmod(0o755)
         env = dict(os.environ,PATH=str(directory)+os.pathsep+os.environ['PATH'],
                    PI05_TEST_SIDE_EFFECT=str(marker),PYTHONDONTWRITEBYTECODE='1')
-        for profile in ('v55_revo1','v55_lejuclaw'):
+        incomplete_linker = Path(self.temporary.name)/'incomplete-linker.json'
+        linker = json.loads((ROOT/'configs/robots/v55_linker_hand.json').read_text(encoding='utf-8'))
+        linker['validated'] = False
+        incomplete_linker.write_text(json.dumps(linker), encoding='utf-8')
+        profiles = [ROOT/'configs/robots'/(name+'.json') for name in ('v55_revo1','v55_lejuclaw')]
+        profiles.append(incomplete_linker)
+        for profile in profiles:
             for entry in entries:
                 result = subprocess.run(['bash',str(ROOT/entry),'--robot-profile',
-                    str(ROOT/'configs/robots'/(profile+'.json'))],cwd=ROOT,env=env,
+                    str(profile)],cwd=ROOT,env=env,
                     capture_output=True,text=True,timeout=5)
                 with self.subTest(profile=profile,entry=entry):
                     self.assertEqual(result.returncode,2,result.stdout+result.stderr)

@@ -199,7 +199,7 @@ case "${1:-}" in
       mkdir -p -- "$task_log_dir"
       task_inference_log="$task_log_dir/$task_inference_session-$(date +%Y%m%d-%H%M%S).log"
       tmux new-session -d -s "$task_inference_session" -c "$task_dir/.." \
-        "bash '$task_dir/deploy_pi05.sh' --robot-profile '$PI05_ROBOT_PROFILE' --pi05-start --model '$task_model' --gpu '$task_gpu' > '$task_inference_log' 2>&1"
+        "env PI05_WORKSTATION_IP='$PI05_WORKSTATION_HOST' bash '$task_dir/deploy_pi05.sh' --robot-profile '$PI05_ROBOT_PROFILE' --pi05-start --model '$task_model' --gpu '$task_gpu' > '$task_inference_log' 2>&1"
       task_deadline=$(( $(date +%s) + 180 ))
       until ss -ltnH "( sport = :$PI05_INFERENCE_PORT )" | grep -q .; do
         tmux has-session -t "=$task_inference_session" 2>/dev/null &&
@@ -221,7 +221,7 @@ case "${1:-}" in
         echo "Proxy session exists without a listener: $task_proxy_session" >&2; exit 3;
       fi
       tmux new-session -d -s "$task_proxy_session" -c "$task_dir/.." \
-        "bash '$task_dir/deploy_pi05.sh' --robot-profile '$PI05_ROBOT_PROFILE' --pi05-proxy-start --model '$task_model'"
+        "env PI05_WORKSTATION_IP='$PI05_WORKSTATION_HOST' bash '$task_dir/deploy_pi05.sh' --robot-profile '$PI05_ROBOT_PROFILE' --pi05-proxy-start --model '$task_model'"
       task_deadline=$(( $(date +%s) + 180 ))
       until ss -ltnH "( sport = :$PI05_WORKSTATION_PORT )" | grep -q .; do
         tmux has-session -t "=$task_proxy_session" 2>/dev/null &&
@@ -384,7 +384,7 @@ if ssh "${task_ssh[@]}" "$task_host" "tmux has-session -t '$task_session' 2>/dev
   echo "Session $task_session already exists; inspect it before starting another instance." >&2
   exit 3
 fi
-ssh "${task_ssh[@]}" "$task_host" "tmux new-session -d -s '$task_session' -c '$task_remote' './upper_start.sh'"
+ssh "${task_ssh[@]}" "$task_host" "tmux new-session -d -s '$task_session' -c '$task_remote' \"env PI05_WORKSTATION_IP='$PI05_WORKSTATION_HOST' bash '$task_remote/upper_start.sh' --robot-profile '$task_remote/common/robot_profile.json'\""
 sleep 3
 ssh "${task_ssh[@]}" "$task_host" "test \"\$(tmux display-message -p -t '$task_session' '#{pane_dead}')\" = 0 || { tmux capture-pane -pt '$task_session' -S -35; exit 4; }"
 echo "PI05_UPPER_STARTED session=$task_session release=$task_version"

@@ -6,6 +6,7 @@ from pathlib import Path
 import unittest
 
 import numpy as np
+from action_safety import ROBOT_PROFILE
 
 try:
     from kuavo_msgs.msg import robotHandPosition
@@ -22,7 +23,7 @@ bridge_path = Path(os.environ.get('PI05_HAND_MESSAGE_BRIDGE', str(Path(__file__)
 tree = ast.parse(bridge_path.read_text(encoding='utf-8'))
 function = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
                 and node.name == 'hand_position_command')
-scope = dict(np=np, require=require)
+scope = dict(np=np, require=require, ROBOT_PROFILE=ROBOT_PROFILE)
 exec(compile(ast.Module(body=[function], type_ignores=[]), 'robot_bridge.py', 'exec'), scope)
 hand_position_command = scope['hand_position_command']
 

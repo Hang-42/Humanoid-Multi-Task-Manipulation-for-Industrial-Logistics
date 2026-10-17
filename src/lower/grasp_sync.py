@@ -6,11 +6,11 @@ No ROS calls are made by this module.
 import numpy as np
 
 from action_safety import (ARM_COLUMNS, ARM_JOINT_NAMES, bounded_plan, arm_command_limits_deg,
-                           arm_speed_limit_deg_s)
+                           arm_speed_limit_deg_s, ROBOT_PROFILE, HAND_BY_SIDE)
 
 SIDE_NAMES = ('left', 'right')
-GRIP_INDICES = ((0, 2, 3, 4, 5), (6, 8, 9, 10, 11))
-RIGHT_GRIP_INDICES = (6, 8, 9, 10, 11)
+GRIP_INDICES = HAND_BY_SIDE
+RIGHT_GRIP_INDICES = GRIP_INDICES[1]
 GRASP_TIMEOUT_SECONDS = 3.0
 GRASP_MIN_WAIT_SECONDS = 1.0
 GRASP_STABLE_SECONDS = .4
@@ -62,7 +62,7 @@ def synchronized_plan(actions, measured_deg, hand_feedback, fk, steps,
                             limit_events=limit_events)
     q = np.asarray(reference_deg, dtype=float).copy()
     previous = np.asarray(hand_feedback if last_hand is None else last_hand, dtype=float)
-    if (previous.shape != (12,) or not np.isfinite(previous).all() or
+    if (previous.shape != (ROBOT_PROFILE.hand_size,) or not np.isfinite(previous).all() or
             np.any(previous < 0) or np.any(previous > 100)):
         raise RuntimeError('Invalid last synchronized hand target')
     previous = np.rint(previous).astype(int)
@@ -198,7 +198,7 @@ class ArmSettlingGate:
 
 def _hand_vector(values, label):
     result = np.asarray(values, dtype=float)
-    if (result.shape != (12,) or not np.isfinite(result).all() or
+    if (result.shape != (ROBOT_PROFILE.hand_size,) or not np.isfinite(result).all() or
             np.any(result < 0) or np.any(result > 100)):
         raise RuntimeError('Invalid closure '+label)
     return result
@@ -229,7 +229,7 @@ class ClosureFeedbackGate:
         self.stable_min = None
         self.stable_max = None
         self.max_error = None
-        self.progress = np.zeros(5)
+        self.progress = np.zeros(len(self.indices))
         self.progress_sufficient = False
         self.target_reached = False
         self.completion_reason = None
@@ -269,7 +269,7 @@ class ClosureFeedbackGate:
         self.progress = values-self.episode_start
         self.progress_sufficient = bool(
             self.progress[0]>=GRASP_PROGRESS_UNITS and
-            np.count_nonzero(self.progress[1:]>=GRASP_PROGRESS_UNITS)>=2 and
+            (len(self.indices) == 1 or np.count_nonzero(self.progress[1:]>=GRASP_PROGRESS_UNITS)>=2) and
             np.all(values<=self.target+GRASP_POSITION_TOLERANCE))
         if self.stable_since is None or gap>GRASP_MAX_SAMPLE_GAP_SECONDS:
             self.stable_since = feedback_stamp

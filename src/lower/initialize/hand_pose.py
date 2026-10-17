@@ -10,11 +10,11 @@ for _parent in Path(__file__).resolve().parents:
         sys.path.insert(0, str(_common))
         break
 from robot_profile import active_profile
+from end_effector import native_names
 ROBOT_PROFILE = active_profile()
 
 
-HAND_NAMES = tuple('%s_%s' % (side,finger) for side in ('l','r')
-                   for finger in ('thumb','thumb_aux','index','middle','ring','pinky'))
+HAND_NAMES = native_names(ROBOT_PROFILE)
 THUMB_INDICES = (0,6)
 # Actual /dexhand/state feedback saved at the user's request on 2026-10-07.
 # Order per hand: thumb, thumb_aux, index, middle, ring, pinky.

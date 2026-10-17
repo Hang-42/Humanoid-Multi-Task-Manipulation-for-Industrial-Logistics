@@ -22,19 +22,27 @@ profile_args() {
 }
 
 profile_bundle_digest() {
-  sha256sum "$PI05_COMMON_DIR/robot_profile.py" "$PI05_COMMON_DIR/end_effector.py" \
-    "$PI05_COMMON_DIR/profile.sh" "$PI05_ROBOT_PROFILE" | sha256sum | cut -c1-16
+  { sha256sum "$PI05_COMMON_DIR/robot_profile.py" "$PI05_COMMON_DIR/end_effector.py" \
+      "$PI05_COMMON_DIR/profile.sh" "$PI05_ROBOT_PROFILE"
+    printf '%s\n' "$PI05_PROFILE_HASH"
+  } | sha256sum | cut -c1-16
 }
 
-profile_install_common() {
-  local task_peer=$1 task_destination=$2 task_expected task_actual
+profile_install_common() (
+  local task_peer=$1 task_destination=$2 task_expected task_actual task_resolved_profile
+  task_resolved_profile=$(mktemp) || return
+  trap 'rm -f -- "$task_resolved_profile"' EXIT
+  # SSH and sudo do not inherit the workstation terminal environment. Send
+  # the resolved value in the profile so every process hashes the same data.
+  PYTHONDONTWRITEBYTECODE=1 python3 "$PI05_COMMON_DIR/robot_profile.py" \
+    --resolved-json > "$task_resolved_profile" || return
   ssh "${task_ssh[@]}" "$task_peer" "mkdir -p '$task_destination/common'"
   scp "${task_ssh[@]}" "$PI05_COMMON_DIR/robot_profile.py" "$PI05_COMMON_DIR/end_effector.py" \
     "$PI05_COMMON_DIR/profile.sh" "$task_peer:$task_destination/common/"
-  scp "${task_ssh[@]}" "$PI05_ROBOT_PROFILE" "$task_peer:$task_destination/common/robot_profile.json"
+  scp "${task_ssh[@]}" "$task_resolved_profile" "$task_peer:$task_destination/common/robot_profile.json"
   task_expected=$(sha256sum "$PI05_COMMON_DIR/robot_profile.py" "$PI05_COMMON_DIR/end_effector.py" \
-    "$PI05_COMMON_DIR/profile.sh" "$PI05_ROBOT_PROFILE" | awk '{print $1}')
+    "$PI05_COMMON_DIR/profile.sh" "$task_resolved_profile" | awk '{print $1}')
   task_actual=$(ssh "${task_ssh[@]}" "$task_peer" \
     "sha256sum '$task_destination/common/robot_profile.py' '$task_destination/common/end_effector.py' '$task_destination/common/profile.sh' '$task_destination/common/robot_profile.json'" | awk '{print $1}')
   test "$task_expected" = "$task_actual" || { echo 'Robot profile bundle checksum mismatch' >&2; return 3; }
-}
+)

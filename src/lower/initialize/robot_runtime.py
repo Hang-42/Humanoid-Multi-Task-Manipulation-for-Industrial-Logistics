@@ -94,6 +94,11 @@ def filesystem_check():
     vendor_driver = vendor.get('EndEffectorType')
     require(vendor_driver == expected_driver or vendor_driver == [expected_driver, expected_driver],
             'Vendor EndEffectorType does not match this robot profile')
+    if ROBOT_PROFILE['eef_type'] == 'linker_hand':
+        bridge = WORKSPACE/'installed/lib/libros_hardware_plant_cxx.so'
+        require(hashlib.sha256(bridge.read_bytes()).hexdigest() ==
+                ROBOT_PROFILE['end_effector']['driver_library_sha256'],
+                'Linker Hand vendor bridge changed since its 0..100 interface was verified')
     for library in (WORKSPACE/'installed/lib/libros_hardware_plant_cxx.so',WORKSPACE/'devel/lib/libnodelet_controller.so'):
         result = command('ldd',str(library))
         require('not found' not in result.stdout,'Missing runtime dependency: '+result.stdout)
@@ -501,10 +506,12 @@ class RobotAdapter:
                 adapter.close()
         self.check_standing()
         self.report['end_effector_init'] = dict(result,status='completed',command_units='0..100')
-        if ROBOT_PROFILE.hand_size == 12:
+        if ROBOT_PROFILE['eef_type'] == 'revo1':
             self.report['thumb_reset'] = self.report['end_effector_init']
         self.save()
-        emit('initial_thumbs_restored',left_target=INITIAL_THUMB,right_target=INITIAL_THUMB,
+        event = 'initial_thumbs_restored' if ROBOT_PROFILE['eef_type'] == 'revo1' else 'initial_end_effector_restored'
+        emit(event,left_target=INITIAL_HAND_POSITION[0],
+             right_target=INITIAL_HAND_POSITION[ROBOT_PROFILE.hand_size//2],
              hand_target=list(INITIAL_HAND_POSITION),actual=result['actual'])
 
     def done(self, already_at_target):

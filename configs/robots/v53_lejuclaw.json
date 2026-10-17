@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "robot_id": "v53_swpu_lejuclaw",
+  "robot_version": 53,
+  "eef_type": "leju_claw",
+  "validated": true,
+  "legacy_records_allowed": false,
+  "network": {
+    "lower_host": "lab@192.168.26.1",
+    "upper_host": "leju_kuavo@192.168.26.12",
+    "lower_ip": "192.168.26.1",
+    "upper_ip": "192.168.26.12",
+    "workstation_ip": "192.168.26.108",
+    "proxy_port": 19092,
+    "inference_port": 8000
+  },
+  "paths": {
+    "vendor_workspace": "/home/lab/kuavo-ros-opensource",
+    "upper_workspace": "/home/leju_kuavo/kuavo_ros_application",
+    "lower_root": "/home/lab/kuavo_pi05_lower",
+    "upper_root": "/home/leju_kuavo/pi05_upper",
+    "urdf": "/home/lab/kuavo-ros-opensource/src/kuavo_assets/models/biped_s53/urdf/biped_s53.urdf",
+    "urdf_sha256": "c104f63d75157be1c5bc1ef43fe4909773936675c710783bfcbc0402f69d2982",
+    "vendor_config": "/home/lab/kuavo-ros-opensource/src/kuavo_assets/config/kuavo_v53/kuavo.json"
+  },
+  "calibration": {
+    "/home/lab/.config/lejuconfig/offset.csv": "d9b3fac344d292c8ecb96c44d23c54f3b4bd0b734bd565a3b7bd68d299b69c8c",
+    "/home/lab/.config/lejuconfig/arms_zero.yaml": "965b00333cecdd25cc1d252064be4055819e51d9856a9022a5cc70a6d61bafa5"
+  },
+  "joints": {
+    "sensor_count": 29,
+    "arm_indices": [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26],
+    "waist_index": 12
+  },
+  "poses": {
+    "arms_down_bounds_deg": [[-5, 20], [-12, 12], [-5, 5], [-35, 1], [-5, 5], [-5, 5], [-5, 5], [-5, 20], [-12, 12], [-5, 5], [-35, 1], [-5, 5], [-5, 5], [-5, 5]],
+    "side": [0, 90, 0, -5, 0, 0, 0, 0, -90, 0, -5, 0, 0, 0],
+    "folded": [-90, 90, 0, -90, 0, 0, 0, -90, -90, 0, -90, 0, 0, 0],
+    "chest_high": [-10.236, 8.632, 3.001, -94.519, -29.75, -6.363, 14.86, -22.051, -6.009, 6.231, -80.351, 27.464, 13.436, 8.091]
+  },
+  "tool": {
+    "end_joint_pattern": "zarm_%s7_end_effector_joint",
+    "left_xyz": [0, 0, 0],
+    "left_rpy": [0, 0, 0],
+    "right_xyz": [0, 0, 0],
+    "right_rpy": [0, 0, 0]
+  },
+  "safety": {
+    "pose_tolerance_deg": [8, 5, 3, 4, 5, 5, 5, 8, 5, 3, 4, 5, 5, 5],
+    "startup_wrist_drop_limit_m": 0.55,
+    "arm_speed_deg_s": 20,
+    "tracking_error_deg": 10,
+    "tracking_grace_s": 0.2,
+    "recovery_speed_deg_s": 10,
+    "recovery_centerline_m": 0.08,
+    "recovery_max_joint_deviation_deg": 70,
+    "recovery_max_below_target_m": 0.35,
+    "recovery_displacement_m": {
+      "elbow": 0.35,
+      "wrist": 0.4,
+      "modeled_hand_tip": 0.45
+    }
+  },
+  "end_effector": {
+    "driver_type": "lejuclaw",
+    "state_topic": "/leju_claw_state",
+    "command_topic": "/leju_claw_command",
+    "initial": [10.5, 10.5],
+    "initial_state_note": "On-site open reference: the single OPEN test returned Reached at approximately 10.53 on both claws and the operator confirmed both open and stationary. Use 10.5 as the explicit initial/open native reference, retaining the 3-unit feedback tolerance. The driver restricts commands to 5..95; 95 is the nominal close command limit, not a measured successful grasp. Do not copy Revo1 finger targets or CAN current setup.",
+    "finger_caps": null,
+    "current_setup": "vendor",
+    "velocity": 30,
+    "effort_a": 1,
+    "min_command_interval_s": 0.1,
+    "command_timeout_s": 5,
+    "position_deadband": 1,
+    "open_position": [10.5, 10.5],
+    "closed_position": [95, 95],
+    "service": "/control_robot_leju_claw"
+  },
+  "cameras": {
+    "serials": {
+      "left": "260422274845",
+      "right": "260422274269",
+      "head": "CP2H16300095"
+    },
+    "rotations": {
+      "head_cam_h": 180,
+      "wrist_cam_l": 0,
+      "wrist_cam_r": 0
+    },
+    "head_driver_rotation": 180,
+    "topics": {
+      "head_cam_h": "/head_camera/color/image_raw",
+      "wrist_cam_l": "/left_wrist_camera/color/image_raw",
+      "wrist_cam_r": "/right_wrist_camera/color/image_raw"
+    }
+  },
+  "models": {
+    "kd12": {
+      "config": "pi05_kuavo_kd_fsdp8",
+      "asset": "kuavo_kd",
+      "checkpoint": "pi05/models/kd12/19999",
+      "validated": false
+    },
+    "cz": {
+      "config": "pi05_kuavo_cz_fsdp8",
+      "asset": "kuavo_cz",
+      "checkpoint": "pi05/models/cz/19999",
+      "validated": false
+    },
+    "lj": {
+      "config": "pi05_kuavo_lj_fsdp8",
+      "asset": "kuavo_lj",
+      "checkpoint": "pi05/models/lj/19999",
+      "validated": true,
+      "validation_basis": "Operator authorized a bounded 60-second exploratory lj run. The actual lj checkpoint and kuavo_lj norm_stats were restored on the workstation, with 16-dimensional state/actions and finite 50x16 software inference checked separately. This flag records software/interface readiness and trial authorization, not physical task success or validated claw grasp semantics."
+    },
+    "lp": {
+      "config": "pi05_kuavo_lp_fsdp8",
+      "asset": "kuavo_lp",
+      "checkpoint": "pi05/models/lp/19999",
+      "validated": false
+    }
+  },
+  "site_inventory": {
+    "checked_on": "2026-10-16",
+    "workstation_ssh": "swpu@192.168.3.139",
+    "version_basis": "Lower ~/.bashrc exports ROBOT_VERSION=53. load_kuavo_real.launch passes this version to robot_version_manager.launch, which selects biped_s53.urdf and kuavo_v53/kuavo.json. The V53 configuration specifies two lejuclaw tools; the V55 configuration specifies two qiangnao tools. This identifies the configured software variant, not an independently verified factory hardware model.",
+    "eef_basis": "Operator confirms two-finger claws; installed V53 vendor configuration matches lejuclaw on both sides.",
+    "vendor_stance_arm_deg": [20, 0, 0, -30, 0, 0, 0, 20, 0, 0, -30, 0, 0, 0],
+    "vendor_stance_note": "The first 14 servo values in ~/.config/lejuconfig/action_files/stance.tact match kuavo_v53/kuavo.json init_arm_pos. This is a nominal arms-down reference; it does not establish measured posture bounds or side/folded/chest_high targets.",
+    "standing_posture_observation": {
+      "checked_on": "2026-10-16",
+      "boot_id": "7b9dec8f-9ecd-4f21-a639-96fe89f2aa42",
+      "hardware_ready": 1,
+      "arms_deg": [8.889, 4.021, -0.094, -22.884, -0.204, -0.523, 0.067, 8.867, -4.305, 0.247, -22.819, 0.007, 0.588, 0.264],
+      "sampling_note": "Three read-only samples after stand_completed; maximum reported arm speed 0.02013 rad/s. The legacy V53 arms-down classification bounds contain all samples. This is a posture observation, not proof of full-path clearance or tracking performance."
+    },
+    "claw_open_reference": {
+      "boot_id": "7b9dec8f-9ecd-4f21-a639-96fe89f2aa42",
+      "requested_open": [0, 0],
+      "driver_limited_target": [5, 5],
+      "observed_open_feedback": [10.533831596374512, 10.52962589263916],
+      "observed_states": [2, 2],
+      "operator_observation": "Both claws open and stationary after the single authorized OPEN test.",
+      "driver_command_limits": [5, 95],
+      "closed_reference_note": "95 is the installed controller's upper command limit; closed physical feedback/contact has not been calibrated by this open-only test."
+    },
+    "urdf_end_joint_origin_xyz_m": {
+      "left": [0, 0, -0.17],
+      "right": [0, 0, -0.17]
+    },
+    "tool_model_note": "Both zarm_*7_end_effector links in the installed V53 URDF are empty links attached with the stated fixed origin. No claw-specific model was found under biped_s53 in the inspected model tree. tool.* is an additional transform after this URDF joint, so copying the existing -0.17m origin into tool.* would count it twice. The physical claw reference point/extent still requires verification.",
+    "camera_serial_basis": "Upper ~/.bashrc and ROS serial parameters agree. RealSense SDK enumeration confirms the two D405 serials; USB inventory confirms the head serial. Physical wrist assignment follows vendor configuration and still needs visual confirmation.",
+    "observed_camera_topics": {
+      "head_cam_h": "/cam_h/color/image_raw",
+      "wrist_cam_l": "/cam_l/color/image_raw",
+      "wrist_cam_r": "/cam_r/color/image_raw"
+    },
+    "camera_topic_note": "cameras.topics retains the namespaces created by this project's managed start_camera.launch. Existing vendor camera nodes use the different observed_camera_topics namespaces; they must be reconciled before starting the managed deployment.",
+    "observed_head_color_rotation": -1,
+    "observed_head_color_flip": false,
+    "camera_rotation_note": "Policy and managed-driver rotations retain template values; current driver settings do not establish orientation consistency with training data.",
+    "claw_direction_note": "Official motion-control API documentation states 0=open and 100=closed for control_robot_leju_claw and leju_claw_state; the installed SDK release()/close() implementations agree. Installed message/service comments state the opposite and are inconsistent with those sources. initial=[0,0] selects empty-claw opening. Physical feedback verification is still pending.",
+    "runtime_feedback_note": "ROS master was reachable but no claw-state or joint-telemetry publisher was observed during inspection. No controller or motion was started.",
+    "model_note": "All four checkpoint directories and their asset norm_stats.json paths exist on the workstation. Full checkpoint integrity and compatibility with this robot and claw state/action semantics are not verified."
+  },
+  "candidate_basis": {
+    "status": "reference-derived; pending on-site commissioning",
+    "claw_api_reference": "https://github.com/LejuRobotics/kuavo-ros-opensource/blob/main/docs/%E8%BF%90%E5%8A%A8%E6%8E%A7%E5%88%B6API.md",
+    "arm_pose_source": "side/folded/chest_high copied as candidates from configs/robots/v53_revo1.json. They describe arm joints, not finger commands. chest_high originates from the old Revo1 demonstration pre-pose and is not an official lejuclaw task pose or a validated target for this robot.",
+    "arms_down_bounds_source": "Copied exactly from configs/robots/v53_revo1.json at the operator's request to reference the old arm initialization configuration. The 2026-10-16 post-stand samples in site_inventory.standing_posture_observation fall within these bounds. These are posture-classification bounds, not joint limits; trajectory, motor and standing guards remain unchanged.",
+    "tool_reference": "Zero additional transforms select the installed URDF's zarm_*7_end_effector reference points, which already include -0.17m from joint 7. This is a model reference convention, not a measured claw TCP or full collision geometry.",
+    "safety_defaults_source": "pose_tolerance_deg and startup_wrist_drop_limit_m are candidate engineering limits copied from the existing V53 profile; they are not manufacturer-certified scene-clearance limits.",
+    "offline_fk_check": {
+      "urdf_sha256": "c104f63d75157be1c5bc1ef43fe4909773936675c710783bfcbc0402f69d2982",
+      "assumptions": "Level body, waist=0, nominal factory arms-down pose, URDF end-frame reference points. No obstacle or full claw collision model.",
+      "planner_checks": "Passed existing joint-limit, stage-speed, height-path and posture-classification checks under the stated assumptions.",
+      "side_peak_speed_deg_s": 21.09375,
+      "side_speed_note": "Existing side_raise_plan uses a separate hard-coded 30 degree/s limit. safety.arm_speed_deg_s=20 is not a uniform cap across initialization stages; this must be reviewed before live execution.",
+      "fold_wrist_raise_m": [0.2751, 0.2751],
+      "inward_peak_speed_deg_s": 19.685390625,
+      "inward_max_wrist_drop_m": [0.5012902709089265, 0.49983241641884546],
+      "inward_wrist_drop_limit_m": 0.55,
+      "physical_validation": false
+    },
+    "commissioning_pending": [
+      "Confirm physical hardware model against factory records or nameplate",
+      "Verify live joint ordering, zero positions and settled factory startup posture",
+      "Verify empty-claw opening direction and feedback at the initial target",
+      "Measure actual claw extent/TCP and review clearance over the entire arm path",
+      "Validate each arm stage and posture-classification tolerances on this robot",
+      "Confirm camera assignment/orientation and resolve existing vendor camera namespaces",
+      "Verify model compatibility separately before inference"
+    ]
+  },
+  "validation_note": "Hardware validation=true retains the operator's 2026-10-16 attestation, not an independent full-path certification. The open reference is based on live Reached feedback plus the operator's direct observation. lj software/interface readiness and a bounded exploratory trial are separately recorded in models.lj.validation_basis; no physical task or grasp success is claimed. Other models remain unverified. Keep legacy_records_allowed=false; never reuse old Qi initialization/hold records or its 600mA CAN setup."
+}

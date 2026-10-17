@@ -1,0 +1,556 @@
+{
+  "schema_version": 1,
+  "robot_id": "v55_linker_hand",
+  "robot_version": 55,
+  "eef_type": "linker_hand",
+  "validated": true,
+  "legacy_records_allowed": false,
+  "network": {
+    "lower_host": "lab@192.168.26.1",
+    "upper_host": "leju_kuavo@192.168.26.12",
+    "lower_ip": "192.168.26.1",
+    "upper_ip": "192.168.26.12",
+    "workstation_ip": null,
+    "proxy_port": 19092,
+    "inference_port": 8000
+  },
+  "paths": {
+    "vendor_workspace": "/home/lab/kuavo-ros-opensource",
+    "upper_workspace": "/home/leju_kuavo/kuavo_ros_application",
+    "lower_root": "/home/lab/kuavo_pi05_lower",
+    "upper_root": "/home/leju_kuavo/pi05_upper",
+    "urdf": "/home/lab/kuavo-ros-opensource/src/kuavo_assets/models/biped_s55/urdf/biped_s55.urdf",
+    "urdf_sha256": "c76db1a077cda62b0310bd86c9371daf813468cb54c28ddc4a8fdf4c3c43101b",
+    "vendor_config": "/home/lab/kuavo-ros-opensource/src/kuavo_assets/config/kuavo_v55/kuavo.json"
+  },
+  "calibration": {
+    "/home/lab/.config/lejuconfig/offset.csv": "e832c1d23f5a348beed968fbf3221c54e00590aff2d65105e40161092c70d991",
+    "/home/lab/.config/lejuconfig/arms_zero.yaml": "61e5bf3133ec61517425fec571fd1e2a5d64d2e51cd80d68c0279eaabf3bf884"
+  },
+  "joints": {
+    "sensor_count": 29,
+    "arm_indices": [
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26
+    ],
+    "waist_index": 12
+  },
+  "poses": {
+    "arms_down_bounds_deg": [
+      [
+        -5,
+        20
+      ],
+      [
+        -12,
+        12
+      ],
+      [
+        -5,
+        5
+      ],
+      [
+        -35,
+        0
+      ],
+      [
+        -5,
+        5
+      ],
+      [
+        -5,
+        5
+      ],
+      [
+        -5,
+        5
+      ],
+      [
+        -5,
+        20
+      ],
+      [
+        -12,
+        12
+      ],
+      [
+        -5,
+        5
+      ],
+      [
+        -35,
+        0
+      ],
+      [
+        -5,
+        5
+      ],
+      [
+        -5,
+        5
+      ],
+      [
+        -5,
+        5
+      ]
+    ],
+    "side": [
+      0,
+      90,
+      0,
+      -5,
+      0,
+      0,
+      0,
+      0,
+      -90,
+      0,
+      -5,
+      0,
+      0,
+      0
+    ],
+    "folded": [
+      -90,
+      90,
+      0,
+      -90,
+      0,
+      0,
+      0,
+      -90,
+      -90,
+      0,
+      -90,
+      0,
+      0,
+      0
+    ],
+    "chest_high": [
+      -10.236,
+      8.632,
+      3.001,
+      -94.519,
+      -29.75,
+      -6.363,
+      14.86,
+      -22.051,
+      -6.009,
+      6.231,
+      -80.351,
+      27.464,
+      13.436,
+      8.091
+    ]
+  },
+  "tool": {
+    "end_joint_pattern": "zarm_%s7_end_effector_joint",
+    "left_xyz": [
+      0,
+      0,
+      0
+    ],
+    "left_rpy": [
+      0,
+      0,
+      0
+    ],
+    "right_xyz": [
+      0,
+      0,
+      0
+    ],
+    "right_rpy": [
+      0,
+      0,
+      0
+    ],
+    "reference_note": "Zero additional transform selects the backed-up URDF end-effector frame. The URDF already applies [0,0,-0.17] m after wrist joint 7. This is a model reference, not a measured Linker fingertip/TCP or a collision envelope; do not add -0.17 a second time."
+  },
+  "safety": {
+    "pose_tolerance_deg": [
+      8,
+      5,
+      3,
+      4,
+      5,
+      5,
+      5,
+      8,
+      5,
+      3,
+      4,
+      5,
+      5,
+      5
+    ],
+    "startup_wrist_drop_limit_m": 0.55,
+    "arm_speed_deg_s": 20,
+    "tracking_error_deg": 10,
+    "tracking_grace_s": 0.2,
+    "recovery_speed_deg_s": 10,
+    "recovery_centerline_m": 0.08,
+    "recovery_max_joint_deviation_deg": 70,
+    "recovery_max_below_target_m": 0.35,
+    "recovery_displacement_m": {
+      "elbow": 0.35,
+      "wrist": 0.4,
+      "modeled_hand_tip": 0.45
+    }
+  },
+  "end_effector": {
+    "driver_type": "linker_hand",
+    "state_topic": "/dexhand/state",
+    "command_topic": "/control_robot_hand_position",
+    "initial": [
+      0,
+      100,
+      0,
+      0,
+      0,
+      0,
+      0,
+      100,
+      0,
+      0,
+      0,
+      0
+    ],
+    "finger_caps": [
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50
+    ],
+    "current_setup": "vendor",
+    "velocity": 30,
+    "effort_a": 1,
+    "min_command_interval_s": 0.1,
+    "command_timeout_s": 5,
+    "position_deadband": 1,
+    "open_position": [
+      0,
+      0
+    ],
+    "closed_position": [
+      100,
+      100
+    ],
+    "interface": "kuavo_dexhand_6dof",
+    "driver_library_sha256": "c43a40561d0f116be567665a728b42d5f787978d7d575b2cb17add029b4fec24",
+    "finger_caps_note": "User-requested engineering default: 50/100 on each thumb/index/middle/ring/pinky command channel, left then right. This limits commanded flexion, not grip force/current. It is not a manufacturer-calibrated or task-validated Linker grasp limit. thumb_aux channels retain the bag initial value 100."
+  },
+  "cameras": {
+    "serials": {
+      "left": "260622272382",
+      "right": "260322278425",
+      "head": "CP2H16300029"
+    },
+    "rotations": {
+      "head_cam_h": 180,
+      "wrist_cam_l": 0,
+      "wrist_cam_r": 0
+    },
+    "head_driver_rotation": 180,
+    "topics": {
+      "head_cam_h": "/head_camera/color/image_raw",
+      "wrist_cam_l": "/left_wrist_camera/color/image_raw",
+      "wrist_cam_r": "/right_wrist_camera/color/image_raw"
+    }
+  },
+  "models": {
+    "kd12": {
+      "config": "pi05_kuavo_kd_fsdp8",
+      "asset": "kuavo_kd",
+      "checkpoint": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/kd12/19999",
+      "validated": true,
+      "validation_basis": "User confirms workstation inference service works and requests physical commissioning assumed passed. Checkpoint manifest/metadata and 16-dimensional state/action norm_stats were read-only checked on 2026-10-17; no full weight reload or robot task success evaluation was performed in this change."
+    },
+    "cz": {
+      "config": "pi05_kuavo_cz_fsdp8",
+      "asset": "kuavo_cz",
+      "checkpoint": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/cz/19999",
+      "validated": true,
+      "validation_basis": "User confirms workstation inference service works and requests physical commissioning assumed passed. Checkpoint manifest/metadata and 16-dimensional state/action norm_stats were read-only checked on 2026-10-17; no full weight reload or robot task success evaluation was performed in this change."
+    },
+    "lj": {
+      "config": "pi05_kuavo_lj_fsdp8",
+      "asset": "kuavo_lj",
+      "checkpoint": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lj/19999",
+      "validated": true,
+      "validation_basis": "User confirms workstation inference service works and requests physical commissioning assumed passed. Checkpoint manifest/metadata and 16-dimensional state/action norm_stats were read-only checked on 2026-10-17; no full weight reload or robot task success evaluation was performed in this change."
+    },
+    "lp": {
+      "config": "pi05_kuavo_lp_fsdp8",
+      "asset": "kuavo_lp",
+      "checkpoint": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lp/19999",
+      "validated": true,
+      "validation_basis": "User confirms workstation inference service works and requests physical commissioning assumed passed. Checkpoint manifest/metadata and 16-dimensional state/action norm_stats were read-only checked on 2026-10-17; no full weight reload or robot task success evaluation was performed in this change."
+    }
+  },
+  "validation_note": "V55/Linker is enabled under the user-requested commissioning assumption. Backup identity, V55 bag initial targets, user-authorized V53 transition references and 50-unit flexion caps are populated. Four model mappings match the user-selected absolute workstation path. Set PI05_WORKSTATION_IP before use. No new live test or robot motion was performed by this change.",
+  "backup_reference": {
+    "host": "mingzi@192.168.43.19",
+    "path": "/data/kuavo-v55-dexhand-backup-20261016-jDHJbi/v55-linker-hand",
+    "vendor_commit": "a3e877726e074ed7b0bf988f0e3a7ad91e6edd11",
+    "vendor_config_note": "The V55 kuavo.json selects linker_hand on both sides. The old initialization profile in the snapshot still identifies V53/Revo1 and is not a V55 deployment profile.",
+    "interface_note": "The backed-up library maps six-channel BrainCo-compatible commands to Linker in send_position and inversely maps thumb feedback in DexhandRosNode::publish_loop. Use 0..100 at ROS level; no second mapping in this project.",
+    "device_note": "HandProtocolType.ini is proto_can. Device entries retain revo1_hand labels; those labels do not override EndEffectorType and do not authorize the Revo1 CAN current tool.",
+    "model_note": "The exact Linker product SKU is not established by the six-channel compatibility interface.",
+    "previous_host": "mingzi@192.168.49.17",
+    "checked_on": "2026-10-17"
+  },
+  "backup_configuration": {
+    "status": "Static backup facts; not live commissioning approval.",
+    "source_config_sha256": "f233e4a714cb2ac31b78da53234d6097f98f7900fc0106c0bb5a0fe057942018",
+    "robot_version_from_lower_bashrc": 55,
+    "upper_bashrc_robot_version": 53,
+    "upper_version_note": "Upper .bashrc still exports 53; lower .bashrc and vendor V55 configuration establish V55/Linker. Correct the stale upper environment during deployment.",
+    "configured_end_effectors": [
+      "linker_hand",
+      "linker_hand"
+    ],
+    "vendor_joint_names": [
+      "leg_l1_joint",
+      "leg_l2_joint",
+      "leg_l3_joint",
+      "leg_l4_joint",
+      "leg_l5_joint",
+      "leg_l6_joint",
+      "leg_r1_joint",
+      "leg_r2_joint",
+      "leg_r3_joint",
+      "leg_r4_joint",
+      "leg_r5_joint",
+      "leg_r6_joint",
+      "waist_yaw_joint",
+      "zarm_l1_joint",
+      "zarm_l2_joint",
+      "zarm_l3_joint",
+      "zarm_l4_joint",
+      "zarm_l5_joint",
+      "zarm_l6_joint",
+      "zarm_l7_joint",
+      "zarm_r1_joint",
+      "zarm_r2_joint",
+      "zarm_r3_joint",
+      "zarm_r4_joint",
+      "zarm_r5_joint",
+      "zarm_r6_joint",
+      "zarm_r7_joint",
+      "zhead_1_joint",
+      "zhead_2_joint"
+    ],
+    "vendor_arm_poses_deg": {
+      "init_arm_pos": [
+        20,
+        0,
+        0,
+        -30,
+        0,
+        0,
+        0,
+        20,
+        0,
+        0,
+        -30,
+        0,
+        0,
+        0
+      ],
+      "walk_arm_pose": [
+        20,
+        0,
+        0,
+        -35,
+        0,
+        0,
+        0,
+        20,
+        0,
+        0,
+        -35,
+        0,
+        0,
+        0
+      ],
+      "arm_pose0": [
+        10,
+        0,
+        0,
+        -30,
+        0,
+        0,
+        20,
+        10,
+        0,
+        0,
+        -30,
+        0,
+        0,
+        20
+      ],
+      "arm_pose1": [
+        10,
+        0,
+        0,
+        -30,
+        0,
+        20,
+        0,
+        10,
+        0,
+        0,
+        -30,
+        0,
+        20,
+        0
+      ],
+      "arm_pose2": [
+        10,
+        20,
+        0,
+        0,
+        0,
+        0,
+        0,
+        10,
+        -20,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "vendor_pose_note": "Manufacturer nominal poses do not define this project side/folded/chest_high targets or arms-down acceptance bounds.",
+    "vendor_geometry_m": {
+      "upper_arm_length": 0.2844,
+      "lower_arm_length": 0.45,
+      "hand_ref_length": 0.193
+    },
+    "urdf_end_joint_origins": {
+      "left": {
+        "xyz": [
+          0.0,
+          0.0,
+          -0.17
+        ],
+        "rpy": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "right": {
+        "xyz": [
+          0.0,
+          0.0,
+          -0.17
+        ],
+        "rpy": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "hand_protocol": "proto_can",
+    "camera_model": "kuavo_5",
+    "waist_camera_serial": "CP2H163000NB",
+    "vendor_camera_topics": {
+      "head_cam_h": "/cam_h/color/image_raw",
+      "wrist_cam_l": "/cam_l/color/image_raw",
+      "wrist_cam_r": "/cam_r/color/image_raw"
+    },
+    "camera_topic_note": "cameras.topics describes the project-managed camera launch namespaces. The vendor camera service uses the namespaces listed here; do not run both camera owners on the same devices.",
+    "camera_rotation_note": "Profile rotations 180/0/0 and head_driver_rotation=180 remain project defaults; backup camera launch does not establish consistency with the selected training images.",
+    "original_workstation_ssh": "tiaozhanbei@192.168.3.115",
+    "workstation_note": "192.168.3.115 is the original workstation management address, not evidence of its robot-facing inference IP. network.workstation_ip remains unset.",
+    "deployment_path_note": "vendor_workspace and upper_workspace exist in the backup; lower_root contains initialize only. upper_root is the intended project deployment path and was absent in the snapshot.",
+    "sdk_gesture_note": "dexhand_base.h generic SDK gestures are open=[60,0,0,0,0,0], close=[50,50,50,50,50,50]. They are not evidence of Linker ROS-mapped initial targets or task-specific finger_caps."
+  },
+  "configuration_pending": [
+    {
+      "fields": [
+        "network.workstation_ip"
+      ],
+      "reason": "Set export PI05_WORKSTATION_IP=<workstation robot LAN IPv4> in the terminal before commands. The loader resolves it and deployment copies the resolved JSON to both computers."
+    }
+  ],
+  "bag_initialization_reference": {
+    "source": "data/灵巧手go.bag",
+    "sha256": "f9279a28bd017988753535c707f53b9ff7da5de6a3389d682e1beba15caf2714",
+    "identity_basis": "User explicitly confirmed V55 + Linker Hand on 2026-10-17.",
+    "report": "docs/go_bag_initial/targets.json",
+    "filled_fields": [
+      "poses.chest_high",
+      "end_effector.initial"
+    ],
+    "verification": "177 identical arm target frames and 177 identical hand command frames; hand feedback agrees; V55 URDF endpoint limits passed. No transition path or live execution verification."
+  },
+  "transition_reference": {
+    "source_profile": "configs/robots/v53_revo1.json",
+    "source_sha256": "2cec1cee0b28128d51b8e22fa201339e1961bc0902f601a1f5d3599b2990ac42",
+    "authorization": "User requested reuse of V53/Revo1 intermediate arm poses, arms-down bounds, tolerances and path limits on 2026-10-17.",
+    "copied_fields": [
+      "poses.side",
+      "poses.folded",
+      "poses.arms_down_bounds_deg",
+      "safety"
+    ],
+    "retained_targets": "V55/Linker go.bag chest_high and initial hand targets retained.",
+    "verification_scope": "Candidate requires V55 URDF offline path checks and live scene/telemetry confirmation.",
+    "grasp_default": {
+      "finger_caps": [
+        50,
+        50,
+        50,
+        50,
+        50,
+        50,
+        50,
+        50,
+        50,
+        50
+      ],
+      "basis": "Selected engineering starting value in the 0..100 ROS command scale; not a measured grasp or a force percentage."
+    },
+    "v55_adjustments": [
+      {
+        "fields": [
+          "poses.arms_down_bounds_deg[3][1]",
+          "poses.arms_down_bounds_deg[10][1]"
+        ],
+        "v53_value_deg": 1,
+        "v55_value_deg": 0,
+        "reason": "V55 URDF zarm_l4_joint/zarm_r4_joint upper limits are 0 degrees; intersect copied acceptance bounds with model limits."
+      }
+    ]
+  },
+  "commissioning": {
+    "basis": "user_assumed_pass",
+    "date": "2026-10-17",
+    "instruction": "User requested physical commissioning to be treated as passed by default.",
+    "agent_performed_live_test": false,
+    "scope": "Enables this V55/Linker profile and model selection under the user assumption; runtime hardware/hash/feedback checks and interactive motion confirmation still apply."
+  }
+}

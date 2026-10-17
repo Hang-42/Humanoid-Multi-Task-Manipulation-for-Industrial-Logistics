@@ -1,0 +1,189 @@
+{
+  "host": "mingzi@192.168.43.19",
+  "root": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05",
+  "models": [
+    {
+      "model": "kd12",
+      "checkpoint": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/kd12/19999",
+      "asset": "kuavo_kd",
+      "config": "pi05_kuavo_kd_fsdp8",
+      "files": [
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/kd12/19999/assets/kuavo_kd/norm_stats.json",
+          "bytes": 3830,
+          "sha256": "e8606c2f7c0314dd8d969dff536ee537558accc61766f353625bf277b1f3e624"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/kd12/19999/params/manifest.ocdbt",
+          "bytes": 120,
+          "sha256": "0bebd48aeb312f47cf7f495a5ca2f6a893f8bb54fd1bc96e11e05658973d788d"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/kd12/19999/params/_METADATA",
+          "bytes": 23493,
+          "sha256": "303a4e354814928e1d29b75e310f2c1ac7e7e29b62f48395b631045ca1cffc73"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/kd12/19999/params/_sharding",
+          "bytes": 17952,
+          "sha256": "63f4c57ba6ff10f4132a639b9942eabcc26942eb34081be1d93bf7ddab816501"
+        }
+      ],
+      "normalization": {
+        "state": {
+          "mean": 16,
+          "std": 16,
+          "q01": 16,
+          "q99": 16
+        },
+        "actions": {
+          "mean": 16,
+          "std": 16,
+          "q01": 16,
+          "q99": 16
+        }
+      }
+    },
+    {
+      "model": "cz",
+      "checkpoint": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/cz/19999",
+      "asset": "kuavo_cz",
+      "config": "pi05_kuavo_cz_fsdp8",
+      "files": [
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/cz/19999/assets/kuavo_cz/norm_stats.json",
+          "bytes": 3807,
+          "sha256": "ee91ef5bdd6131e331a0620924649e48e0d6c2c7017503f257cec96dc4fe2bd3"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/cz/19999/params/manifest.ocdbt",
+          "bytes": 120,
+          "sha256": "18aa2030f8a586bb873ba3be02e5711a0d1ea68b8f91c86e471d93b147db7929"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/cz/19999/params/_METADATA",
+          "bytes": 23493,
+          "sha256": "303a4e354814928e1d29b75e310f2c1ac7e7e29b62f48395b631045ca1cffc73"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/cz/19999/params/_sharding",
+          "bytes": 17952,
+          "sha256": "63f4c57ba6ff10f4132a639b9942eabcc26942eb34081be1d93bf7ddab816501"
+        }
+      ],
+      "normalization": {
+        "state": {
+          "mean": 16,
+          "std": 16,
+          "q01": 16,
+          "q99": 16
+        },
+        "actions": {
+          "mean": 16,
+          "std": 16,
+          "q01": 16,
+          "q99": 16
+        }
+      }
+    },
+    {
+      "model": "lj",
+      "checkpoint": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lj/19999",
+      "asset": "kuavo_lj",
+      "config": "pi05_kuavo_lj_fsdp8",
+      "files": [
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lj/19999/assets/kuavo_lj/norm_stats.json",
+          "bytes": 3836,
+          "sha256": "442e0dd42f1975d30dc4981f761bd97b15234490db43ccaf8c6f4e739fdace9e"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lj/19999/params/manifest.ocdbt",
+          "bytes": 120,
+          "sha256": "9f3c868c84dfc13a2034cd6536576534f101df8c37cc43488778b9ead168fcd8"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lj/19999/params/_METADATA",
+          "bytes": 23493,
+          "sha256": "303a4e354814928e1d29b75e310f2c1ac7e7e29b62f48395b631045ca1cffc73"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lj/19999/params/_sharding",
+          "bytes": 17952,
+          "sha256": "63f4c57ba6ff10f4132a639b9942eabcc26942eb34081be1d93bf7ddab816501"
+        }
+      ],
+      "normalization": {
+        "state": {
+          "mean": 16,
+          "std": 16,
+          "q01": 16,
+          "q99": 16
+        },
+        "actions": {
+          "mean": 16,
+          "std": 16,
+          "q01": 16,
+          "q99": 16
+        }
+      }
+    },
+    {
+      "model": "lp",
+      "checkpoint": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lp/19999",
+      "asset": "kuavo_lp",
+      "config": "pi05_kuavo_lp_fsdp8",
+      "files": [
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lp/19999/assets/kuavo_lp/norm_stats.json",
+          "bytes": 3845,
+          "sha256": "aeab1af9bde65e7cfaaf2e189799d8c485de49cddeb63ad0456255ecc547debc"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lp/19999/params/manifest.ocdbt",
+          "bytes": 120,
+          "sha256": "5b4b820642e9bee890cc84e79682ae7924747fc822624b97e1a913afb908cf61"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lp/19999/params/_METADATA",
+          "bytes": 23493,
+          "sha256": "303a4e354814928e1d29b75e310f2c1ac7e7e29b62f48395b631045ca1cffc73"
+        },
+        {
+          "path": "/data/Humanoid Multi-Task Manipulation for Industrial Logistics/pi05/models/lp/19999/params/_sharding",
+          "bytes": 17952,
+          "sha256": "63f4c57ba6ff10f4132a639b9942eabcc26942eb34081be1d93bf7ddab816501"
+        }
+      ],
+      "normalization": {
+        "state": {
+          "mean": 16,
+          "std": 16,
+          "q01": 16,
+          "q99": 16
+        },
+        "actions": {
+          "mean": 16,
+          "std": 16,
+          "q01": 16,
+          "q99": 16
+        }
+      }
+    }
+  ],
+  "config_sha256": "a9759148e9e016395197179583a11338fd2030d840d872a40d1b8c4975fd6769",
+  "config_name_basis": "Read-only OpenPI training/config.py: explicit cz fsdp8 definition and generated kd/lj/lp fsdp8 definitions; kd12 directory maps to kd config and kuavo_kd asset.",
+  "method": "Read-only SFTP; checked nonempty manifest and metadata, hashed small metadata files and norm_stats. Did not load full model tensors or run inference/motion.",
+  "verification": {
+    "python_suites": {
+      "discovered": 137,
+      "passed": 134,
+      "skipped": 3,
+      "skips": "Two Linux-only shell cases and one actual ROS serialization case."
+    },
+    "resolved_profile_transfer": "Offline SSH/SCP stand-ins passed; canonical profile identity survives loss of terminal environment; IP changes identity and release bundle.",
+    "model_paths_with_spaces": "Four model-shell exports checked.",
+    "bash_syntax": "profile.sh, deploy_pi05.sh and robot_local.sh passed.",
+    "hardware_test": "User-assumed pass; no new robot action or service deployment."
+  }
+}

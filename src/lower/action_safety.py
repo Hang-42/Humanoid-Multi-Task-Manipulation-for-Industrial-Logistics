@@ -121,9 +121,9 @@ def check_initialization(result, boot, expected_thumb=15, expected_aux=None, exp
     reset = result.get('end_effector_init', result.get('thumb_reset',{}))
     if reset.get('status') != 'completed' or len(reset.get('target',[])) != ROBOT_PROFILE.hand_size:
         raise RuntimeError('Initialization did not record the matching end-effector reset')
-    if ROBOT_PROFILE.hand_size == 12 and any(reset['target'][i] != expected_thumb for i in (0,6)):
+    if ROBOT_PROFILE['eef_type'] == 'revo1' and any(reset['target'][i] != expected_thumb for i in (0,6)):
         raise RuntimeError('Run initialization with the current thumb profile: %s' % expected_thumb)
-    if ROBOT_PROFILE.hand_size == 12 and expected_aux is not None and any(reset['target'][i] != expected_aux for i in (1,7)):
+    if ROBOT_PROFILE['eef_type'] == 'revo1' and expected_aux is not None and any(reset['target'][i] != expected_aux for i in (1,7)):
         raise RuntimeError('Run initialization with the current thumb auxiliary profile: %s' % expected_aux)
     if expected_hand is not None and list(reset['target']) != list(expected_hand):
         raise RuntimeError('Run initialization with the current saved hand profile')

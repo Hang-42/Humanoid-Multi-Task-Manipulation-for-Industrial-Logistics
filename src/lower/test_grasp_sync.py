@@ -12,7 +12,7 @@ import unittest
 import numpy as np
 
 from grasp_sync import (synchronized_plan, grasp_execution_window, ArmSettlingGate, ClosureFeedbackGate,
-                        GRASP_TIMEOUT_SECONDS)
+                        GRASP_TIMEOUT_SECONDS, ROBOT_PROFILE)
 from test_arm_trajectory_continuity import WideFK
 import test_arm_trajectory_continuity as continuity
 
@@ -307,6 +307,7 @@ class BridgeClosureTests(unittest.TestCase):
         class Message:
             def __init__(self): self.header=NS(stamp=None)
         scope=dict(np=np,time=clock,require=require,
+            ROBOT_PROFILE=ROBOT_PROFILE,
             ArmSettlingGate=ArmSettlingGate,
             ClosureFeedbackGate=ClosureFeedbackGate,GRASP_TIMEOUT_SECONDS=GRASP_TIMEOUT_SECONDS,
             robotHandPosition=Message,rospy=NS(Time=NS(now=lambda:0)),
@@ -321,8 +322,14 @@ class BridgeClosureTests(unittest.TestCase):
             hand_feedback=(0,None),command_connections_ready=lambda:True,
             hand_pub=NS(publish=sent.append),
             grasp_evidence=lambda stage,target:evidence.append(stage))
+        def command_hand(target):
+            message=Message()
+            message.left_hand_position,message.right_hand_position=target[:6],target[6:]
+            sent.append(message)
+        bridge.end_effector=NS(command=command_hand)
         def guard():
             bridge.hand_feedback=(clock.value,None)
+            bridge.last_hand_feedback_stamp=clock.value
             q=np.full(14,6. if unstable_arms else 0.)
             hand=[0,98,0,0,0,0,76 if stalled else 99,98,59 if stalled else 99,99,99,99]
             if package_plateau:
@@ -574,7 +581,8 @@ class ArgumentTests(unittest.TestCase):
         path=Path(os.environ.get('PI05_TEST_BRIDGE',str(Path(__file__).parent/'robot_bridge.py')))
         tree=ast.parse(path.read_text())
         parse=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='parse_arguments')
-        scope=dict(argparse=argparse,DEFAULT_EXECUTION_STEPS=5,MAX_EXECUTION_STEPS=50)
+        scope=dict(argparse=argparse,DEFAULT_EXECUTION_STEPS=5,MAX_EXECUTION_STEPS=50,
+                   ROBOT_PROFILE=ROBOT_PROFILE)
         exec(compile(ast.Module(body=[parse],type_ignores=[]),'robot_bridge.py','exec'),scope)
         self.assertEqual(scope['parse_arguments']([]).grasp_lookahead,0)
         args=scope['parse_arguments'](['--sync-grasp','--grasp-lookahead','5','--duration','300'])

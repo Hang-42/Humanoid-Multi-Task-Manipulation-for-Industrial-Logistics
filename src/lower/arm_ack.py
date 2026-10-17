@@ -4,6 +4,19 @@ import numpy as np
 TIMED_CONTROLLER = '/humanoid_Arm_time_target_control'
 
 
+def require_inactive_mpc_route(sample, now):
+    """The new timed controller advertises an RL-only output even in MPC.
+
+    It is not a competing source only while trusted, fresh feedback confirms
+    that branch is inactive. Never use this exception for another publisher.
+    """
+    if (sample is None or len(sample) != 3 or
+            sample[2] != '/nodelet_manager' or
+            not np.isfinite(sample[0]) or not 0 <= now-sample[0] < .5 or
+            not np.isfinite(sample[1]) or sample[1] != 0.):
+        raise RuntimeError('Timed-controller alternate output requires fresh MPC-only route feedback')
+
+
 def command_connections_ready(bus_info, timed_controller_uri, require_hand=True):
     """Require real TCP peers; our own monitoring subscriptions do not count.
 

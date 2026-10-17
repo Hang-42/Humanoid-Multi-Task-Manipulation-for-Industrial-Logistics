@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 
 from action_safety import (ARM_JOINT_NAMES, arm_speed_limit_deg_s,
-                           bounded_plan, retimed_plan)
+                           bounded_plan, retimed_plan, ROBOT_PROFILE)
 from arm_ack import (TIMED_CONTROLLER, arm_ack_arrays, initial_arm_reference,
                      validate_arm_trajectory_ack, ack_summary)
 from grasp_sync import grasp_execution_window
@@ -137,6 +137,7 @@ class BridgeExecutionTests(unittest.TestCase):
             def __init__(self):
                 self.header = NS(stamp=None)
         scope = dict(np=np, time=time, bounded_plan=bounded_plan, retimed_plan=retimed_plan,
+                     ROBOT_PROFILE=ROBOT_PROFILE, HAND_SCALAR_INDICES=(0,6),
                      grasp_execution_window=grasp_execution_window,
                      require=require, arm_speed_limit_deg_s=arm_speed_limit_deg_s,
                      validate_arm_trajectory_ack=validate_arm_trajectory_ack,
@@ -156,6 +157,10 @@ class BridgeExecutionTests(unittest.TestCase):
         telemetry = NS(lock=threading.Lock(), acks=[])
         arm_messages = []
         hand_messages = []
+        def command_hand(target):
+            message = Message()
+            message.left_hand_position, message.right_hand_position = target[:6], target[6:]
+            hand_messages.append(message)
         def publish(message):
             arm_messages.append(message)
             frames = np.asarray(message.values).reshape(-1, 14)
@@ -170,6 +175,7 @@ class BridgeExecutionTests(unittest.TestCase):
                     initial_hands=self.hands.tolist(), last_hand_command=None,
                     robot=NS(fk=WideFK(), telemetry=telemetry, directory=Path('.')),
                     arm_pub=NS(publish=publish), hand_pub=NS(publish=hand_messages.append),
+                    end_effector=NS(command=command_hand),
                     command_connections_ready=lambda: True)
         bridge.execute = MethodType(scope['execute'], bridge)
         return bridge, arm_messages, hand_messages, events, saved
@@ -242,6 +248,7 @@ class BridgeClaimTests(unittest.TestCase):
                             timed_controller_uri='fake', session_path=Path('not-written.json'), boot='test',
                             controller_identity={}, robot=NS(mode_service=switch, telemetry=telemetry, fk=WideFK()),
                             arm_reference=None)
+                bridge.end_effector = NS(connect_commands=lambda: None)
                 if supplied:
                     scope['claim'](bridge)
                     np.testing.assert_allclose(bridge.arm_reference, np.zeros(14))
