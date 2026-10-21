@@ -500,7 +500,6 @@
     "source": "data/灵巧手go.bag",
     "sha256": "f9279a28bd017988753535c707f53b9ff7da5de6a3389d682e1beba15caf2714",
     "identity_basis": "User explicitly confirmed V55 + Linker Hand on 2026-10-17.",
-    "report": "docs/go_bag_initial/targets.json",
     "filled_fields": [
       "poses.chest_high",
       "end_effector.initial"

@@ -6,12 +6,37 @@ task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 task_openpi="$task_root/openpi"
 task_python="$task_root/envs/pi05/bin/python"
 
+task_require_writable_dir() {
+  local task_directory=$1 task_probe
+  if mkdir -p -- "$task_directory" &&
+     task_probe=$(mktemp "$task_directory/.pi05-write-check.XXXXXX"); then
+    rm -f -- "$task_probe"
+    return 0
+  fi
+  printf 'PI05_ENV_NOT_WRITABLE directory=%s user=%s\n' "$task_directory" "$(id -un)" >&2
+  echo 'Repair the local runtime directory, then rerun the installer as your normal user:' >&2
+  printf '  sudo mkdir -p -- %q\n' "$task_root/envs" >&2
+  printf '  sudo chown -R -- %q %q\n' "$(id -un):$(id -gn)" "$task_root/envs" >&2
+  printf '  sudo chmod -R u+rwX -- %q\n' "$task_root/envs" >&2
+  return 2
+}
+
 case "${1:---check}" in
   --check) ;;
   --install)
     test -s "$task_openpi/setup_kuavo_inference.sh" || {
       echo "Missing $task_openpi/setup_kuavo_inference.sh" >&2; exit 2;
     }
+    # Check actual writes before uv starts; copied runtime trees may belong
+    # to another user even when the repository itself is writable.
+    for task_directory in "$task_root/envs" "$task_root/envs/cache/uv" \
+                          "$task_root/envs/cache/openpi" "$task_root/envs/cache/jax" \
+                          "$task_root/envs/tmp"; do
+      task_require_writable_dir "$task_directory"
+    done
+    if test -e "$task_root/envs/pi05"; then
+      task_require_writable_dir "$task_root/envs/pi05"
+    fi
     # The upstream installer derives its environment prefix from its own path.
     bash "$task_openpi/setup_kuavo_inference.sh" ;;
   *) echo 'Usage: install_env.sh [--check|--install]' >&2; exit 2 ;;
